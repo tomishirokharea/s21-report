@@ -78,6 +78,7 @@
   .bar { height:8px; background:#e9eff7; border-radius:4px; overflow:hidden; } .bar i { display:block; height:100%; background:var(--blue); }
   details { margin:6px 0; } summary { cursor:pointer; font-weight:bold; color:var(--navy); }
   .ro { font-size:12px; color:var(--gray); text-align:center; margin:8px 0; }
+  @media print { .noprint, .tabs, h1, .sub, #toast { display:none !important; } body { background:#fff; } .card { border:none; } #tab-pioneer { display:block !important; } #tab-hub, #tab-check, #tab-pdf, #tab-setup { display:none !important; } }
   #loading { position:fixed; inset:0; background:rgba(255,255,255,.6); display:none; align-items:center; justify-content:center; font-weight:bold; color:var(--navy); }
 </style>
 </head>
@@ -217,7 +218,7 @@ async function renderSecretary(ym) {
   app.innerHTML = `
   <h1>書記用 月次提出画面</h1>
   <div class="sub">${esc(d.congregation)}　<select id="ym" style="width:auto;display:inline-block">${sel.map(y => `<option value="${y}" ${y === d.ym ? 'selected' : ''}>${ymLabel(y)}分</option>`).join('')}</select></div>
-  <div class="tabs"><button class="on" data-tab="hub">hub入力</button><button data-tab="check">確認事項</button><button data-tab="pdf">巡回訪問PDF</button><button data-tab="setup">初期設定</button></div>
+  <div class="tabs"><button class="on" data-tab="hub">hub入力</button><button data-tab="check">確認事項</button><button data-tab="pioneer">開拓者の確認</button><button data-tab="pdf">巡回訪問PDF</button><button data-tab="setup">初期設定</button></div>
   <div id="tab-hub">
     <div class="msg ${d.storedAt ? 'ok' : 'warn'}">${d.storedAt ? '自動集計済み: ' + esc(d.storedAt) : 'この月はまだ自動集計されていません（下の数字は現時点の暫定値）'}　<button class="btn sm sec" id="agg">今すぐ集計して確定</button></div>
     <div class="sec-grid">
@@ -240,6 +241,14 @@ async function renderSecretary(ym) {
     <div class="card credit"><h3>承認された活動の時間（加算時間の確定）</h3>
       ${d.creditRows.length ? d.creditRows.map(c => `<div class="kv"><div class="k">${esc(c.name)}（${ymLabel(c.ym)}）<br><span class="muted">野外奉仕 ${c.hours}h ／ 承認活動 ${c.actHours}h</span></div>加算 <input type="number" value="${c.credit || ''}" data-id="${c.id}" data-ym="${c.ym}"> h <button class="btn sm sec" data-credit="${c.id}|${c.ym}">確定</button></div>`).join('') : '<div class="muted">該当なし</div>'}
       <div class="muted">確定すると備考に「承認活動 X時間（うち加算 Y時間）」が記録されます。加算時間はS-236の基準で判断してください。報告の数字には含まれません。</div></div>
+  </div>
+  <div id="tab-pioneer" style="display:none">
+    <div class="card noprint"><h3>正規開拓者の野外奉仕活動の確認</h3>
+      <p class="muted">書記と奉仕監督が、全ての正規開拓者の時間と加算時間を確認します。奉仕年度の始め（9月）から選んだ月までの月平均が ${'50'} 時間に達しているかを見ます。</p>
+      <button class="btn sm" data-pr="mar">3月1日ごろの確認（9月〜2月分）</button><button class="btn sm" data-pr="jul">7月分までの確認（9月〜7月分）</button>
+      <div style="margin-top:8px">または　<select id="prTo" style="width:auto;display:inline-block"></select> 分まで　<button class="btn sm sec" id="prGo">表示</button></div>
+    </div>
+    <div id="prOut"></div>
   </div>
   <div id="tab-pdf" style="display:none">
     <div class="card"><h3>巡回訪問用PDF</h3><p>S-21個人別（活発→不活発、グループ別）・S-21区分別合計（3枚）・S-88 を、出力フォルダに保存します。</p>
@@ -268,16 +277,60 @@ async function renderSecretary(ym) {
       <div class="muted">接続先: <code>${esc(API)}</code></div></div>
   </div>`;
   $('#ym').onchange = (e) => renderSecretary(e.target.value);
-  document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { document.querySelectorAll('.tabs button').forEach(x => x.classList.remove('on')); b.classList.add('on'); ['hub', 'check', 'pdf', 'setup'].forEach(t => $('#tab-' + t).style.display = t === b.dataset.tab ? '' : 'none'); });
+  document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { document.querySelectorAll('.tabs button').forEach(x => x.classList.remove('on')); b.classList.add('on'); ['hub', 'check', 'pioneer', 'pdf', 'setup'].forEach(t => $('#tab-' + t).style.display = t === b.dataset.tab ? '' : 'none'); });
   document.querySelectorAll('.cp').forEach(b => b.onclick = async () => { try { await navigator.clipboard.writeText(b.dataset.v); b.classList.add('done'); b.textContent = 'コピー済'; } catch (e) { toast('コピーできませんでした', 'err'); } });
   $('#agg').onclick = async () => { try { await call({ action: 'aggregate', ym: d.ym }); toast('集計を確定しました'); renderSecretary(d.ym); } catch (e) { toast(e.message, 'err'); } };
   document.querySelectorAll('[data-credit]').forEach(b => b.onclick = async () => { const [id, cym] = b.dataset.credit.split('|'); const inp = $(`input[data-id="${id}"][data-ym="${cym}"]`); try { await call({ action: 'setCredit', id, ym: cym, credit: inp.value || 0 }); toast('加算時間を記録しました'); } catch (e) { toast(e.message, 'err'); } });
+  initPioneer(d.ym);
   $('#vissue').onclick = async () => { try { const r = await call({ action: 'issueVisitToken', days: $('#vdays').value, showAttention: $('#vatt').checked }); $('#vres').innerHTML = `<div class="msg ok">期限 ${esc(r.expires)} まで有効</div><input type="text" value="${esc(r.url)}" readonly onclick="this.select()">`; } catch (e) { toast(e.message, 'err'); } };
   $('#vrevoke').onclick = async () => { try { await call({ action: 'revokeVisitToken' }); toast('無効にしました'); $('#vres').innerHTML = ''; } catch (e) { toast(e.message, 'err'); } };
   $('#vpreview').onclick = () => { location.href = location.pathname + '?api=' + encodeURIComponent(API) + '&t=' + TOKEN + '&mode=visit'; };
   $('#pdf').onclick = async () => { try { const r = await call({ action: 'exportPdf', years: $('#years').value.split(/[,\s]+/).filter(Boolean) }); $('#pdfres').innerHTML = r.files.map(f => `<div><a href="${f.url}" target="_blank">${esc(f.name)}</a></div>`).join(''); toast('PDFを出力しました'); } catch (e) { toast(e.message, 'err'); } };
 }
 
+
+// ------------------------------------------------------------
+// 開拓者の野外奉仕活動の確認（書記・奉仕監督）
+// ------------------------------------------------------------
+function initPioneer(curYm) {
+  const sel = $('#prTo'); const opts = []; for (let i = 0; i < 24; i++) opts.push(ymAdd(curYm, -i));
+  sel.innerHTML = opts.map(y => `<option value="${y}">${ymLabel(y)}</option>`).join('');
+  const sy = (ym) => { const [y, m] = ym.split('-').map(Number); return m >= 9 ? y + 1 : y; };
+  // 「3月」「7月」ボタン：まだ来ていない期間なら前の年度を見る
+  const pick = (m) => { let y = sy(curYm); let t = y + '-' + ('0' + m).slice(-2); if (t > curYm) t = (y - 1) + '-' + ('0' + m).slice(-2); return t; };
+  document.querySelectorAll('[data-pr]').forEach(b => b.onclick = () => showPioneer(b.dataset.pr === 'mar' ? pick(2) : pick(7)));
+  $('#prGo').onclick = () => showPioneer(sel.value);
+}
+async function showPioneer(toYm) {
+  const out = $('#prOut');
+  try {
+    const d = await call({ action: 'pioneerReview', toYm });
+    const mh = d.months.map(ym => '<th>' + Number(ym.split('-')[1]) + '月</th>').join('');
+    const cell = (m, r) => {
+      if (r.notStarted || m.ym < r.from) return '<td style="color:#c0c6cf">' + (m.reported && m.hours ? m.hours : '—') + '</td>';
+      const t = m.hours + m.credit; const low = t < d.goal;
+      return `<td style="${!m.reported ? 'background:#fdecea;color:#b3261e' : low ? 'color:#b26a00' : ''}">${m.reported ? m.hours + (m.credit ? '<br><small>+' + m.credit + '</small>' : '') : '未'}${m.creditPending ? '<br><small style="color:#b3261e">加算未確定</small>' : ''}</td>`;
+    };
+    out.innerHTML = `
+    <div class="card">
+      <h3>${esc(d.congregation)}　${ymLabel(d.fromYm)}〜${ymLabel(d.toYm)}（${d.months.length}カ月）</h3>
+      <div class="msg ${d.shortCount ? 'warn' : 'ok'}">正規開拓者 ${d.count}名のうち、月平均 ${d.goal}時間に達していない人：<b>${d.shortCount}名</b></div>
+      <div style="overflow-x:auto"><table class="v">
+        <tr><th style="min-width:110px">氏名</th>${mh}<th>野外奉仕</th><th>加算</th><th>合計</th><th>月数</th><th>月平均</th><th>不足</th>${d.remainingMonths ? '<th>残り月の目安</th>' : ''}</tr>
+        ${d.rows.map(r => `<tr style="${r.short ? 'background:#fff5e0' : ''}">
+          <td class="l">${r.short ? '⚠ ' : ''}${esc(r.name)}<br><small class="muted">${esc(r.group || '')}${r.midYear ? '・' + ymLabel(r.from) + '〜' : ''}</small></td>
+          ${r.monthly.map(m => cell(m, r)).join('')}
+          ${r.notStarted ? `<td colspan="6" class="muted">期間内に開拓者としての時間の報告なし</td>` : `<td>${r.hours}</td><td>${r.credit || ''}</td><td><b>${r.total}</b></td><td>${r.months}</td>
+          <td><b style="color:${r.short ? '#b3261e' : '#1f7a3a'}">${r.avg}</b></td><td>${r.shortBy ? r.shortBy + 'h' : ''}</td>`}
+          ${d.remainingMonths ? '<td>' + (r.needPerMonth === null ? '' : '月 ' + r.needPerMonth + 'h') + '</td>' : ''}</tr>`).join('')}
+      </table></div>
+      <div class="muted" style="margin-top:6px">数字＝野外奉仕の時間、<small>+数字</small>＝確定した加算時間、<span style="color:#b3261e">未</span>＝報告なし（0時間として計算）、<span style="color:#b26a00">橙色</span>＝その月が${d.goal}時間未満。<br>
+      月数は奉仕年度の始めから（年度の途中で任命された人は、補助開拓ではない時間の報告が最初にある月から。灰色の数字はそれより前の月）。「残り月の目安」＝年間の目安（月${d.goal}時間×開拓奉仕をする月数。通年なら${d.yearlyGoal}時間）に届くために、残り${d.remainingMonths}カ月で必要な1カ月あたりの時間。<br>
+      「加算未確定」の月は、確認事項タブで加算時間を確定してから見直してください。</div>
+      <button class="btn sec noprint" onclick="window.print()">この表を印刷する</button>
+    </div>`;
+  } catch (e) { toast(e.message, 'err'); }
+}
 
 // ------------------------------------------------------------
 // 巡回訪問ダッシュボード（閲覧専用）
