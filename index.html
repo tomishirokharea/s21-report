@@ -37,16 +37,43 @@
   .hist { width:100%; border-collapse:collapse; font-size:13px; }
   .hist td, .hist th { border-bottom:1px solid var(--line); padding:4px 6px; text-align:center; }
   /* overseer list */
-  .mem { display:grid; grid-template-columns:1fr 46px 56px 46px 56px; gap:6px; align-items:center; padding:8px 4px; border-bottom:1px solid var(--line); }
-  .mem.head { font-size:11px; color:var(--gray); border-bottom:2px solid var(--blue); padding:4px; }
-  .mem.head span { text-align:center; } .mem.head span:first-child { text-align:left; }
+  .wrap.ov { max-width:680px; }
+  .ovtop { display:grid; grid-template-columns:1fr 1.4fr; gap:8px; align-items:end; }
+  .ovtop label { font-size:12px; color:var(--gray); display:block; }
+  .ovtop .fixed { font-size:16px; padding:8px 0; color:#1f2a37; }
+  table.gsum { width:100%; border-collapse:collapse; font-size:13px; margin-top:6px; }
+  table.gsum td, table.gsum th { border-bottom:1px solid var(--line); padding:6px 4px; text-align:center; }
+  table.gsum th { font-size:11px; color:var(--gray); font-weight:normal; }
+  table.gsum td.l { text-align:left; }
+  table.gsum tr.mine td { background:#eef4fc; }
+  table.gsum tr.g { cursor:pointer; }
+  table.gsum .ovs { font-size:11px; color:var(--gray); }
+  .unsub { color:var(--err); font-weight:bold; } .alldone { color:var(--ok); font-weight:bold; }
+  details.grp { padding:0; overflow:hidden; }
+  details.grp > summary { list-style:none; padding:12px 14px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  details.grp > summary::-webkit-details-marker { display:none; }
+  details.grp > summary::before { content:"▸"; color:var(--blue); }
+  details.grp[open] > summary::before { content:"▾"; }
+  details.grp > summary .gname { font-size:17px; }
+  details.grp > summary .gcount { margin-left:auto; font-size:13px; font-weight:normal; }
+  details.grp .gbody { padding:0 10px 12px; }
+  .mem { padding:8px 4px; border-bottom:1px solid var(--line); }
+  .mem .l1 { display:grid; grid-template-columns:1fr 46px 56px 46px 56px; gap:6px; align-items:center; }
+  .mem .l2 { display:flex; gap:6px; align-items:center; margin-top:6px; }
+  .mem .l2 input[data-f=remarks] { flex:1; min-width:0; height:36px; font-size:15px; text-align:left; padding:0 8px; }
+  .mem .l2 .cr { display:flex; align-items:center; gap:3px; font-size:13px; color:var(--navy); white-space:nowrap; }
+  .mem .l2 .cr input { width:56px; height:36px; }
+  .mem .act { font-size:11px; color:var(--warn); }
+  .memh { display:grid; grid-template-columns:1fr 46px 56px 46px 56px; gap:6px; font-size:11px; color:var(--gray); border-bottom:2px solid var(--blue); padding:4px; }
+  .memh span { text-align:center; } .memh span:first-child { text-align:left; }
   .mem .nm { font-size:15px; overflow:hidden; line-height:1.3; }
-  .mem.done { background:#f3f5f8; color:#9aa5b5; } .mem.done .tg { opacity:.5; pointer-events:none; } .mem.done input { color:#9aa5b5; }
-  .mem.inactive { color:#b5bcc8; }
+  .mem.own { background:#f3f5f8; } .mem.own .l1 { color:#9aa5b5; } .mem.own .l1 .tg { opacity:.5; pointer-events:none; } .mem.own .l1 input, .mem.own input[data-f=remarks] { color:#9aa5b5; background:#f3f5f8; }
+  .mem.inactive .nm { color:#b5bcc8; }
   .mem input { width:100%; height:38px; font-size:16px; text-align:center; border:1px solid #9aa5b5; border-radius:5px; }
+  .mem input:disabled { background:#f3f5f8; }
+  .onlyUnsub .mem.has { display:none; }
   .pill { display:inline-block; font-size:10px; background:#e9eff7; color:var(--navy); border-radius:8px; padding:0 6px; margin-left:4px; vertical-align:middle; }
-  .pill.warn { background:#fff5e0; color:var(--warn); }
-  .memo-btn { font-size:11px; color:var(--blue); background:none; border:none; padding:0; }
+  .pill.warn { background:#fff5e0; color:var(--warn); } .pill.ok { background:#eaf6ec; color:var(--ok); }
   /* secretary */
   .sec-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
   @media (max-width:640px) { .sec-grid { grid-template-columns:1fr; } }
@@ -79,6 +106,7 @@
   details { margin:6px 0; } summary { cursor:pointer; font-weight:bold; color:var(--navy); }
   .ro { font-size:12px; color:var(--gray); text-align:center; margin:8px 0; }
   @media print { .noprint, .tabs, h1, .sub, #toast { display:none !important; } body { background:#fff; } .card { border:none; } #tab-pioneer { display:block !important; } #tab-hub, #tab-check, #tab-pdf, #tab-setup { display:none !important; } }
+  #toast { position:fixed; top:10px; left:50%; transform:translateX(-50%); z-index:20; width:calc(100% - 32px); max-width:600px; box-shadow:0 2px 10px rgba(0,0,0,.15); }
   #loading { position:fixed; inset:0; background:rgba(255,255,255,.6); display:none; align-items:center; justify-content:center; font-weight:bold; color:var(--navy); }
 </style>
 </head>
@@ -155,55 +183,164 @@ async function renderPersonal(ym) {
 }
 
 // ------------------------------------------------------------
-// 監督用フォーム
+// 監督用フォーム（全グループを1画面に。共通URL・監督個人のURL・書記のURLで開ける）
 // ------------------------------------------------------------
+const OV_BY_KEY = 's21_ov_by';
+const stripTag = (s) => String(s || '').replace(/\s*承認活動\s*\d+h（うち加算\s*\d+h）/g, '').replace(/\s*［加算\s*\d+h］/g, '').trim();
+const isOwn = (r) => !!r && (r.source === 's4' || r.source === 'map');
+let OV = null;
+
 async function renderOverseer(ym) {
+  app.classList.add('ov');
   const d = await call({ action: 'overseer', ym });
+  let saved = ''; try { saved = localStorage.getItem(OV_BY_KEY) || ''; } catch (e) {}
+  const byId = d.me ? d.me.id : (d.overseers.some(o => o.id === saved) ? saved : '');
+  OV = { d, ym: d.ym, byId };
+  const myGroup = () => { if (d.me) return d.me.group; const o = d.overseers.find(x => x.id === OV.byId); return o ? o.group : ''; };
   const opts = [ymAdd(d.ym, 1), d.ym, ymAdd(d.ym, -1), ymAdd(d.ym, -2)];
+  const byGroups = [...new Set(d.overseers.map(o => o.group))];
   app.innerHTML = `
-  <h1>${esc(d.group)}</h1>
-  <div class="sub">${esc(d.congregation)}　監督: ${esc(d.overseer.name)}</div>
+  <h1>野外奉仕報告　監督用</h1>
+  <div class="sub">${esc(d.congregation)}　全グループ</div>
   <div class="card">
-    <select id="ym">${opts.map(y => `<option value="${y}" ${y === d.ym ? 'selected' : ''}>${ymLabel(y)}</option>`).join('')}</select>
-    <div style="height:10px"></div>
-    <div class="mem head"><span>氏名</span><span>伝道</span><span>研究</span><span>補助</span><span>時間</span></div>
-    ${d.members.map(m => memberRow(m)).join('')}
-    <div class="msg warn" id="unsub">未提出 <b>${d.unsubmitted.length}名</b>${d.unsubmitted.length ? '（' + d.unsubmitted.map(esc).join('・') + '）' : ''}</div>
-    <div class="muted">1行入力するごとに自動保存されます。本人がWEB提出した行（グレー）は上書きできません。</div>
-    <button class="btn" id="close">月締め完了</button>
+    <div class="ovtop">
+      <div><label>月</label><select id="ym">${opts.map(y => `<option value="${y}" ${y === d.ym ? 'selected' : ''}>${ymLabel(y)}</option>`).join('')}</select></div>
+      <div><label>入力する人</label>${d.me ? `<div class="fixed">${esc(d.me.name)}</div>` :
+        `<select id="by"><option value="">選んでください</option>${byGroups.map(g => `<optgroup label="${esc(g || '（グループなし）')}">${d.overseers.filter(o => o.group === g).map(o => `<option value="${esc(o.id)}" ${o.id === byId ? 'selected' : ''}>${esc(o.name)}</option>`).join('')}</optgroup>`).join('')}</select>`}</div>
+    </div>
+    <div class="msg warn" id="needBy" style="display:${OV.byId ? 'none' : 'block'}">はじめに「入力する人」で自分の名前を選んでください（この端末に記憶されます）。</div>
+    <h3 style="margin-top:12px">グループの状況 <span class="muted" id="totalCount"></span></h3>
+    <table class="gsum"><tr><th style="text-align:left">グループ</th><th>提出</th><th>未提出</th><th>月締め</th></tr>
+      ${d.groups.map((g, gi) => `<tr class="g" data-gi="${gi}" id="gs-${gi}"><td class="l">${esc(g.group)}<div class="ovs">${g.overseers.map(esc).join('・')}</div></td><td class="gsub"></td><td class="gun"></td><td class="gcl"></td></tr>`).join('')}
+    </table>
+    <label style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:14px"><input type="checkbox" id="onlyUnsub" style="width:20px;height:20px"> 未提出の人だけ表示する</label>
+  </div>
+  <div id="groups">
+  ${d.groups.map((g, gi) => `
+    <details class="card grp" id="g-${gi}">
+      <summary><b class="gname">${esc(g.group)}</b><span class="muted">${g.overseers.map(esc).join('・')}</span><span class="gcount" id="gh-${gi}"></span></summary>
+      <div class="gbody">
+        <div class="memh"><span>氏名</span><span>伝道</span><span>研究</span><span>補助</span><span>時間</span></div>
+        ${g.members.map(m => memberRow(m)).join('')}
+        <div class="msg warn" id="gu-${gi}"></div>
+        <button class="btn sec" data-close="${gi}">${esc(g.group)}の月締め完了</button>
+      </div>
+    </details>`).join('')}
+  </div>
+  <div class="card muted">
+    ・1行入力するごとに自動保存されます（保存した行は一瞬緑色になります）。<br>
+    ・グレーの行は本人がWEBで提出したものです。数字と備考は変えられませんが、開拓者の<b>加算時間</b>は入力できます。<br>
+    ・<b>加算時間</b>（開拓者のみ）：承認された活動のうち加算できる時間。野外奉仕と合わせて月${d.cap}時間までです。報告の時間には含まれず、S-21の備考に記録されます。開拓者学校などの学校の時間は上限とは別なので、備考に「開拓者学校30h」のように書いてください。<br>
+    ・不活発の人は各グループの最後に薄く表示されます。報告があれば入力できます。
   </div>`;
+
+  // 開くグループ: 自分のグループ（入力する人のグループ）
+  const openMine = () => { const mg = myGroup(); d.groups.forEach((g, gi) => { $('#gs-' + gi).classList.toggle('mine', g.group === mg); if (g.group === mg) $('#g-' + gi).open = true; }); };
+  openMine();
+  d.groups.forEach((g, gi) => updateGroupCounts(gi));
   $('#ym').onchange = (e) => renderOverseer(e.target.value);
-  $('#close').onclick = async () => { await call({ action: 'closeMonth', ym: d.ym }); toast('月締めを記録しました'); };
-  d.members.forEach(m => bindMember(m, d.ym));
+  if ($('#by')) $('#by').onchange = (e) => { OV.byId = e.target.value; try { localStorage.setItem(OV_BY_KEY, OV.byId); } catch (er) {} $('#needBy').style.display = OV.byId ? 'none' : 'block'; openMine(); };
+  $('#onlyUnsub').onchange = (e) => $('#groups').classList.toggle('onlyUnsub', e.target.checked);
+  document.querySelectorAll('tr.g').forEach(tr => tr.onclick = () => { const el = $('#g-' + tr.dataset.gi); el.open = true; el.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+  document.querySelectorAll('[data-close]').forEach(b => b.onclick = async () => {
+    const gi = Number(b.dataset.close), g = d.groups[gi];
+    if (needBy()) return;
+    if (g.unsubmitted.length && !confirm(g.group + ' にはまだ未提出の人が ' + g.unsubmitted.length + ' 名います。月締めにしますか？')) return;
+    try { const r = await call({ action: 'closeMonth', ym: OV.ym, group: g.group, by: OV.byId }); g.closed = r.closed; updateGroupCounts(gi); toast(g.group + ' の月締めを記録しました'); } catch (e) { toast(e.message, 'err'); }
+  });
+  d.groups.forEach((g, gi) => g.members.forEach(m => bindMember(m, gi)));
+}
+function needBy() {
+  if (OV.byId) return false;
+  toast('はじめに「入力する人」で自分の名前を選んでください', 'err');
+  const sel = $('#by'); if (sel) { sel.scrollIntoView({ behavior: 'smooth', block: 'center' }); sel.focus(); }
+  return true;
+}
+function updateGroupCounts(gi) {
+  const g = OV.d.groups[gi];
+  const act = g.members.filter(m => m.active);
+  g.submitted = act.filter(m => m.report).length;
+  g.unsubmitted = act.filter(m => !m.report).map(m => m.name);
+  const tr = $('#gs-' + gi);
+  $('.gsub', tr).textContent = g.submitted + ' / ' + act.length;
+  $('.gun', tr).innerHTML = g.unsubmitted.length ? `<span class="unsub">${g.unsubmitted.length}名</span>` : '<span class="alldone">0</span>';
+  $('.gcl', tr).innerHTML = g.closed ? `<span class="pill ok">済</span><div class="ovs">${esc(g.closed.by)}</div>` : '';
+  $('#gh-' + gi).innerHTML = (g.closed ? '<span class="pill ok">月締め済</span> ' : '') + (g.unsubmitted.length ? `未提出 <span class="unsub">${g.unsubmitted.length}</span>` : '<span class="alldone">全員提出</span>');
+  const u = $('#gu-' + gi);
+  u.className = 'msg ' + (g.unsubmitted.length ? 'warn' : 'ok');
+  u.innerHTML = g.unsubmitted.length ? `未提出 <b>${g.unsubmitted.length}名</b>（${g.unsubmitted.map(esc).join('・')}）` : '活発な人は全員提出済みです' + (g.closed ? `（月締め: ${esc(g.closed.by)} ${esc(g.closed.at)}）` : '');
+  const all = OV.d.groups.reduce((a, x) => [a[0] + x.members.filter(m => m.active && m.report).length, a[1] + x.members.filter(m => m.active).length], [0, 0]);
+  $('#totalCount').textContent = '全体 ' + all[0] + ' / ' + all[1] + ' 名提出';
+}
+function rowStatus(m) {
+  const r = m.report;
+  if (isOwn(r)) return '<span class="pill">本人提出</span>';
+  if (r && r.source === 'overseer') return '<span class="pill ok">入力済</span>';
+  if (r) return '<span class="pill">' + (r.source === 'import' ? '取込' : '入力済') + '</span>';
+  return '';
 }
 function memberRow(m) {
   const r = m.report || {};
-  const own = r.source === 's4' || r.source === 'map';
-  const cls = own ? 'done' : !m.active ? 'inactive' : '';
-  const warn = m.active && !own && m.monthsWithout >= 4 ? `<span class="pill warn">${6 - m.monthsWithout}カ月で不活発</span>` : '';
+  const own = isOwn(m.report);
+  const cls = [own ? 'own' : '', !m.active ? 'inactive' : '', m.report ? 'has' : ''].join(' ');
+  const warn = m.active && !m.report && m.monthsWithout >= 4 ? `<span class="pill warn">${6 - m.monthsWithout}カ月で不活発</span>` : '';
+  const kind = m.rp ? '正規' : m.sp ? '特別' : m.fm ? '宣教者' : '';
   return `<div class="mem ${cls}" id="m-${m.id}">
-    <div class="nm">${esc(m.name)}${own ? '<span class="pill">提出済</span>' : !m.active ? '<span class="pill">不活発</span>' : ''}${warn}<br><button class="memo-btn" data-memo="${m.id}">備考${r.remarks ? '✎' : ''}</button></div>
-    <div class="tg ${r.preached ? 'on' : ''}" data-f="preached"></div>
-    <input type="number" inputmode="numeric" data-f="studies" value="${r.studies ?? ''}" ${own ? 'disabled' : ''}>
-    <div class="tg ${r.aux ? 'on' : ''}" data-f="aux"></div>
-    <input type="number" inputmode="numeric" data-f="hours" value="${r.hours || ''}" ${own || !(m.pioneer || r.aux) ? 'disabled' : ''}>
+    <div class="l1">
+      <div class="nm">${esc(m.name)}${kind ? `<span class="pill">${kind}</span>` : ''}${!m.active ? '<span class="pill">不活発</span>' : ''}<span class="st">${rowStatus(m)}</span>${warn}</div>
+      <div class="tg ${r.preached ? 'on' : ''}" data-f="preached"></div>
+      <input type="number" inputmode="numeric" min="0" data-f="studies" value="${r.studies || ''}" ${own ? 'disabled' : ''}>
+      <div class="tg ${r.aux ? 'on' : ''}" data-f="aux"></div>
+      <input type="number" inputmode="numeric" min="0" data-f="hours" value="${r.hours || ''}" ${own || !(m.pioneer || r.aux) ? 'disabled' : ''}>
+    </div>
+    <div class="l2">
+      <input type="text" data-f="remarks" placeholder="備考" maxlength="180" value="${esc(stripTag(r.remarks))}" ${own ? 'disabled' : ''}>
+      ${m.pioneer ? `<span class="cr">加算<input type="number" inputmode="numeric" min="0" data-f="credit" value="${r.credit || ''}">h</span>` : ''}
+    </div>
+    ${m.pioneer && r.actHours ? `<div class="act">本人の報告：承認された活動 ${r.actHours}時間</div>` : ''}
   </div>`;
 }
-function bindMember(m, ym) {
+function bindMember(m, gi) {
   const el = $('#m-' + m.id); if (!el) return;
-  let remarks = (m.report && m.report.remarks) || '';
-  const own = m.report && (m.report.source === 's4' || m.report.source === 'map');
-  const save = async () => {
-    if (own) return;
-    const payload = { action: 'overseerSubmit', id: m.id, ym,
-      preached: $('[data-f=preached]', el).classList.contains('on'), studies: $('[data-f=studies]', el).value || 0,
-      aux: $('[data-f=aux]', el).classList.contains('on'), hours: $('[data-f=hours]', el).value || 0, remarks };
-    try { await call(payload); el.style.background = '#eaf6ec'; setTimeout(() => el.style.background = '', 600); }
-    catch (e) { toast(e.message, 'err'); }
+  const f = (k) => $('[data-f=' + k + ']', el);
+  const own = isOwn(m.report);
+  const flash = () => { el.style.background = '#eaf6ec'; setTimeout(() => el.style.background = '', 700); };
+  const after = (report) => {
+    m.report = report; el.classList.add('has'); $('.st', el).innerHTML = rowStatus(m);
+    const w = $('.pill.warn', el); if (w) w.remove();
+    updateGroupCounts(gi); flash();
   };
-  el.querySelectorAll('.tg').forEach(t => t.onclick = () => { if (own) return; t.classList.toggle('on'); if (t.dataset.f === 'aux') { $('[data-f=hours]', el).disabled = !(m.pioneer || t.classList.contains('on')); } save(); });
-  el.querySelectorAll('input').forEach(i => i.onchange = save);
-  $('[data-memo]', el).onclick = () => { const v = prompt(m.name + ' の備考', remarks); if (v !== null) { remarks = v; save(); } };
+  const capMsg = (res) => { if (res.capped) toast(`野外奉仕と加算時間は合わせて月${res.cap}時間までのため、加算を${res.credit ?? res.report.credit}時間にしました`, 'warn'); };
+  const save = async () => {
+    if (own || needBy()) return;
+    const payload = { action: 'overseerSubmit', by: OV.byId, id: m.id, ym: OV.ym,
+      preached: f('preached').classList.contains('on'), studies: f('studies').value || 0,
+      aux: f('aux').classList.contains('on'), hours: f('hours').value || 0, remarks: f('remarks').value };
+    if (f('credit')) payload.credit = f('credit').value;
+    const empty = !payload.preached && !(Number(payload.studies) > 0) && !payload.aux && !(Number(payload.hours) > 0) && !payload.remarks.trim() && !(Number(payload.credit) > 0);
+    if (!m.report && empty) return;
+    try {
+      const res = await call(payload);
+      if (f('credit')) f('credit').value = res.report.credit || '';
+      after(res.report); capMsg(res);
+    } catch (e) { toast(m.name + '：' + e.message, 'err'); }
+  };
+  el.querySelectorAll('.l1 .tg').forEach(t => t.onclick = () => {
+    if (own) return;
+    t.classList.toggle('on');
+    if (t.dataset.f === 'aux') f('hours').disabled = !(m.pioneer || t.classList.contains('on'));
+    save();
+  });
+  ['studies', 'hours', 'remarks'].forEach(k => f(k).onchange = save);
+  if (f('credit')) f('credit').onchange = async () => {
+    if (!own) return save();
+    if (needBy()) return;
+    try {
+      const res = await call({ action: 'overseerCredit', by: OV.byId, id: m.id, ym: OV.ym, credit: f('credit').value || 0 });
+      f('credit').value = res.credit || ''; m.report.credit = res.credit; m.report.remarks = res.remarks;
+      flash(); capMsg(res);
+    } catch (e) { toast(m.name + '：' + e.message, 'err'); }
+  };
 }
 
 // ------------------------------------------------------------
@@ -264,6 +401,9 @@ async function renderSecretary(ym) {
       <button class="btn sm sec" id="vrevoke">発行済みURLを無効にする</button></div>
   </div>
   <div id="tab-setup" style="display:none">
+    <div class="card"><h3>監督用URL（全グループ共通・1つだけ）</h3>
+      <p class="muted">全グループの監督・補佐に同じURLを配ります。開いた人は最初に「入力する人」で自分の名前を選び、全員分の一覧の中で入力します。他のグループの提出状況も見られます。URLを知っている人は誰でも入力できるので、監督以外には渡さないでください（作り直しはスプレッドシートのメニュー「監督共通URLを作り直す」）。</p>
+      <button class="btn sm sec" id="ovUrlBtn">監督用URLを表示</button><div id="ovUrl"></div></div>
     <div class="card"><h3>初期設定（スプレッドシート側で行います）</h3>
       <ol style="padding-left:20px">
         <li>テンプレートのスプレッドシートを「コピーを作成」</li>
@@ -272,7 +412,7 @@ async function renderSecretary(ym) {
         <li>設定シート: 会衆名・集会曜日・締切日・HTML_URL（このページのURL）</li>
         <li>既存S-21（PDF）をDriveフォルダに置き、フォルダIDを 設定!取込フォルダID に → メニュー「既存S-21を取り込む」→ 取込_確認を確認 → 「反映」</li>
         <li>LINE: Messaging APIチャネルを作り、トークンを設定シートへ。Webhook URL = API_URL</li>
-        <li>メニュー「URL一覧を作成」→ 各成員・監督に配布。「トリガーを登録」</li>
+        <li>メニュー「URL一覧を作成」→ 各成員に個人用URL、監督全員に「（監督共通）」のURLを配布。「トリガーを登録」</li>
       </ol>
       <div class="muted">接続先: <code>${esc(API)}</code></div></div>
   </div>`;
@@ -282,6 +422,7 @@ async function renderSecretary(ym) {
   $('#agg').onclick = async () => { try { await call({ action: 'aggregate', ym: d.ym }); toast('集計を確定しました'); renderSecretary(d.ym); } catch (e) { toast(e.message, 'err'); } };
   document.querySelectorAll('[data-credit]').forEach(b => b.onclick = async () => { const [id, cym] = b.dataset.credit.split('|'); const inp = $(`input[data-id="${id}"][data-ym="${cym}"]`); try { await call({ action: 'setCredit', id, ym: cym, credit: inp.value || 0 }); toast('加算時間を記録しました'); } catch (e) { toast(e.message, 'err'); } });
   initPioneer(d.ym);
+  $('#ovUrlBtn').onclick = async () => { try { const r = await call({ action: 'overseerUrl' }); $('#ovUrl').innerHTML = `<input type="text" value="${esc(r.url)}" readonly onclick="this.select()" style="margin-top:8px"><button class="btn sm" id="ovUrlCp">コピー</button> <a class="btn sm sec" href="${esc(r.url)}" target="_blank" style="text-decoration:none">開いてみる</a>`; $('#ovUrlCp').onclick = async () => { try { await navigator.clipboard.writeText(r.url); toast('コピーしました'); } catch (e) { toast('コピーできませんでした', 'err'); } }; } catch (e) { toast(e.message, 'err'); } };
   $('#vissue').onclick = async () => { try { const r = await call({ action: 'issueVisitToken', days: $('#vdays').value, showAttention: $('#vatt').checked }); $('#vres').innerHTML = `<div class="msg ok">期限 ${esc(r.expires)} まで有効</div><input type="text" value="${esc(r.url)}" readonly onclick="this.select()">`; } catch (e) { toast(e.message, 'err'); } };
   $('#vrevoke').onclick = async () => { try { await call({ action: 'revokeVisitToken' }); toast('無効にしました'); $('#vres').innerHTML = ''; } catch (e) { toast(e.message, 'err'); } };
   $('#vpreview').onclick = () => { location.href = location.pathname + '?api=' + encodeURIComponent(API) + '&t=' + TOKEN + '&mode=visit'; };
