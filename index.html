@@ -646,13 +646,17 @@ function drawOvStats() {
     const y0 = d.years[0], y1 = d.years[1];
     h += `<div class="card"><h3>${lm}の会衆（締切が過ぎた最後の月）</h3><div class="tiles">
         ${tile(L.active, '活発な伝道者', dlt(P.active, L.active))}
-        ${tile(L.weekend, '週末の集会（平均）', dlt(P.weekend, L.weekend))}
-        ${tile(L.weekday, '週日の集会（平均）', dlt(P.weekday, L.weekday))}
+        ${tile(L.weekend, '週末の集会（平均）' + (L.weekendHall != null ? `<br>会館 ${L.weekendHall}・Zoom ${L.weekendZoom}` : ''), dlt(P.weekend, L.weekend))}
+        ${tile(L.weekday, '週日の集会（平均）' + (L.weekdayHall != null ? `<br>会館 ${L.weekdayHall}・Zoom ${L.weekdayZoom}` : ''), dlt(P.weekday, L.weekday))}
         ${tile(studies(L), '聖書レッスン', dlt(studies(P), studies(L)))}
         ${tile(L.pioneers, '正規・特別開拓者・宣教者', dlt(P.pioneers, L.pioneers))}
         ${tile(L.aux, '補助開拓者', dlt(P.aux, L.aux))}
       </div></div>
       <div class="card"><h3>活発な伝道者と集会の出席</h3>${lineChart([{ name: '活発な伝道者', values: T.map(t => t.active), color: '#2f5d9b' }, { name: '週末の集会', values: T.map(t => t.weekend), color: '#1f7a3a' }, { name: '週日の集会', values: T.map(t => t.weekday), color: '#b26a00' }], labels)}</div>
+      ${T.some(t => t.weekendHall != null || t.weekdayHall != null) ? `<div class="card"><h3>集会の出席：会館とZoom（1回あたりの平均）</h3>
+        <div style="font-size:13px;font-weight:bold;margin-top:4px">週末の集会</div>${stackChart([{ name: '会館', values: T.map(t => t.weekendHall), color: '#2f5d9b' }, { name: 'Zoom', values: T.map(t => t.weekendZoom), color: '#1f7a3a' }], labels)}
+        <div style="font-size:13px;font-weight:bold;margin-top:8px">週日の集会</div>${stackChart([{ name: '会館', values: T.map(t => t.weekdayHall), color: '#2f5d9b' }, { name: 'Zoom', values: T.map(t => t.weekdayZoom), color: '#1f7a3a' }], labels)}
+        <div class="muted">案内係が LINE に投稿した会館・Zoom の人数から。棒の高さが1回あたりの合計です。</div></div>` : ''}
       <div class="card"><h3>開拓者の人数</h3>${lineChart([{ name: '正規・特別・宣教者', values: T.map(t => t.pioneers), color: '#2f5d9b' }, { name: '補助開拓者', values: T.map(t => t.aux), color: '#b26a00' }], labels, { zero: true, unit: '人' })}<div class="muted">その月に報告した人数</div></div>
       <div class="card"><h3>聖書レッスン（会衆全体）</h3>${stackChart([{ name: '正規・特別・宣教者', values: by('pioneer'), color: '#2f5d9b' }, { name: '補助開拓者', values: by('aux'), color: '#b26a00' }, { name: '伝道者', values: by('other'), color: '#8a6fd1' }], labels)}<div class="muted">その月に司会された個別の聖書レッスンの数（色は司会した人の区分）</div></div>
       <div class="card"><h3>昨年度との比べ（月の平均）</h3><table class="v"><tr><th></th><th>${y0.sy}年度</th><th>${y1.sy}年度</th><th>差</th></tr>
@@ -848,7 +852,7 @@ function secShowTab(t) {
   secTab = t;
   document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x.dataset.tab === t));
   ['hub', 'check', 'pioneer', 'pdf', 'setup'].forEach(k => { const el = $('#tab-' + k); if (el) el.style.display = k === t ? '' : 'none'; });
-  if (t === 'setup') { loadMapKeyStatus(); loadOvPass(); }
+  if (t === 'setup') { loadMapKeyStatus(); loadOvPass(); loadAttHist(); }
   if (t === 'pdf') loadBackupStatus();
 }
 // ------------------------------------------------------------
@@ -883,6 +887,47 @@ async function setOvPass() {
     ovpInfo = r.status; $('#ovpNew').value = ''; $('#ovpNew2').value = ''; drawOvPass();
     toast(changing ? 'パスワードを変えました。監督に新しい数字を伝えてください' : 'パスワードを決めました。監督に数字を伝えてください');
   } catch (e) { toast(e.message, 'err'); } finally { btn.disabled = false; }
+}
+// ------------------------------------------------------------
+// 書記: LINE のトーク履歴から、過去の集会の会館・Zoom の内訳を取り込む（初期設定タブ）。正式な記録（S-88）は変えない
+// ------------------------------------------------------------
+let ahInfo = null, ahText = '', ahPrev = null;
+async function loadAttHist() {
+  try { const r = await call({ action: 'attHistory', op: 'status' }, { quiet: true, retry: true }); ahInfo = r.status; } catch (e) { ahInfo = { error: e.message }; }
+  drawAttHist();
+}
+function drawAttHist() {
+  const st = $('#ahStatus'); if (!st) return;
+  const i = ahInfo;
+  st.innerHTML = !i ? '<span class="muted">状態を確認中…</span>' : i.error ? `<div class="msg err">${esc(i.error)}</div>`
+    : i.count ? `<div class="msg ok">取り込み済み: ${i.count}回（${esc(i.from)}〜${esc(i.to)}）</div>` : '<div class="muted">まだ取り込んでいません。</div>';
+  const out = $('#ahOut'); if (!out) return;
+  const p = ahPrev;
+  if (!p) { out.innerHTML = ''; return; }
+  const yl = (ym) => ym.slice(2, 4) + '/' + Number(ym.slice(5));
+  out.innerHTML = `<div class="msg ${p.months.every(m => m.same || !m.rec) ? 'ok' : 'warn'}" style="margin-top:8px">
+      ${esc(p.from)}〜${esc(p.to)} の <b>${p.meetings}回</b> の集会を読み取りました。<br>
+      ${p.fixed.length ? `本文の日付が違っていたため、投稿した日の集会とした投稿: ${p.fixed.map(x => esc(x.date)).join('・')}<br>` : ''}
+      ${p.sumOff ? `会館＋Zoom が合計と合わない回: ${p.sumOff}回（合計はそのまま）<br>` : ''}
+      いまの記録（S-88・出席シート）と回数・合計が違う月は ⚠ です。<b>取り込んでも、正式な記録（S-88）は変わりません</b>（会館・Zoom のグラフだけに使います）。</div>
+    <div style="overflow-x:auto;max-height:340px;overflow-y:auto"><table class="v"><tr><th>月</th><th></th><th>LINE<br><small>回・平均</small></th><th>会館</th><th>Zoom</th><th>いまの記録<br><small>回・平均</small></th><th></th></tr>
+      ${p.months.map(m => `<tr><td>${yl(m.ym)}</td><td>${m.kind}</td><td>${m.count}・${m.avg}</td><td>${m.hall ?? ''}</td><td>${m.zoom ?? ''}</td><td>${m.rec ? m.rec.count + '・' + m.rec.avg : '—'}</td><td>${!m.rec ? '' : m.same ? '✓' : '<b style="color:var(--warn)">⚠</b>'}</td></tr>`).join('')}</table></div>
+    <button class="btn" id="ahImport">この内容で取り込む</button>`;
+  $('#ahImport').onclick = async () => {
+    const b = $('#ahImport'); b.disabled = true; b.textContent = '取り込んでいます…';
+    try { const r = await call({ action: 'attHistory', op: 'import', text: ahText }); ahInfo = r.status; ahPrev = null; ahText = ''; $('#ahFile').value = ''; drawAttHist(); toast(r.written + '回分の会館・Zoom の内訳を取り込みました'); }
+    catch (e) { toast(e.message, 'err'); b.disabled = false; b.textContent = 'この内容で取り込む'; }
+  };
+}
+async function readAttHistFile(file) {
+  if (!file) return;
+  if (file.size > 3 * 1024 * 1024) return toast('ファイルが大きすぎます（3MBまで）', 'err');
+  ahText = await file.text();
+  ahPrev = null; drawAttHist();
+  const b = $('#ahFileBtn'); b.textContent = '読み取っています…';
+  try { ahPrev = await call({ action: 'attHistory', op: 'preview', text: ahText }); }
+  catch (e) { toast(e.message, 'err'); ahText = ''; }
+  finally { b.textContent = 'トーク履歴のファイルを選ぶ'; drawAttHist(); }
 }
 async function clearOvPass() {
   if (!confirm('監督用のパスワードをなくしますか？\n監督用URLを知っている人は、だれでも入力できるようになります。')) return;
@@ -1052,6 +1097,12 @@ function drawSecretary(d, stale) {
       <label style="display:flex;align-items:center;gap:6px;font-size:14px;margin-top:6px"><input type="checkbox" id="ovpShow" style="width:20px;height:20px"> 数字を見せる</label>
       <button class="btn sec" id="ovpSet">パスワードを決める</button>
       <button class="btn sm sec" id="ovpClear" style="display:none">パスワードをなくす</button></div>
+    <div class="card" id="ah"><h3>集会の出席：会館とZoomの内訳（LINEのトーク履歴から）</h3>
+      <p class="muted">案内係のLINEグループで「トーク履歴を送信」したテキストを読み込むと、過去の集会ごとの会館・Zoom の人数を取り込めます（監督用の画面「会衆の様子」のグラフに使います）。取り込む前に、いまの記録と比べた表が出ます。正式な記録（S-88）は変わりません。取り込み直すと、前の分と入れ替わります。</p>
+      <div id="ahStatus"><span class="muted">状態を確認中…</span></div>
+      <input type="file" id="ahFile" accept=".txt,text/plain" style="display:none">
+      <button class="btn sec" id="ahFileBtn">トーク履歴のファイルを選ぶ</button>
+      <div id="ahOut"></div></div>
     <div class="card" id="mk"><h3>区域マップ連携キー</h3>
       <p class="muted">区域マップの「係の画面」→「奉仕報告（会衆の報告システム S21）」に、下の S21 のURL と連携キーを入れます。<br>
       キーは発行したときにこの画面に1回だけ表示されます（ページを閉じる・読み込み直すと消えます）。コピーしてから区域マップに切り替えて貼り付けてください。LINE やメールでは送らないでください。<br>
@@ -1099,6 +1150,9 @@ function drawSecretary(d, stale) {
   $('#bkStart').onclick = startBackup;
   drawBackup();
   $('#ovpSet').onclick = setOvPass;
+  $('#ahFileBtn').onclick = () => $('#ahFile').click();
+  $('#ahFile').onchange = (e) => readAttHistFile(e.target.files[0]);
+  drawAttHist();
   $('#ovpClear').onclick = clearOvPass;
   $('#ovpShow').onchange = (e) => { ['#ovpNew', '#ovpNew2'].forEach(x => { $(x).type = e.target.checked ? 'text' : 'password'; }); };
   ['#ovpNew', '#ovpNew2'].forEach(x => { $(x).oninput = (e) => { e.target.value = e.target.value.replace(/[^0-9]/g, '').slice(0, 6); }; });
