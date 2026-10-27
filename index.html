@@ -1394,6 +1394,10 @@ function sinceCard(d) {
   const tl = (n, l, sub) => `<div class="tile"><div class="n">${n ?? '—'}</div><div class="l">${l}</div>${sub ? `<div class="d">${sub}</div>` : ''}</div>`;
   const point = (n, l, base) => tl(n, l, base === null || base === undefined ? `<span class="na">${b}の記録なし</span>` : `${b} ${base} から ${dlt0(base, n)}`);
   const ago = (k) => S.avg[k] === null || S.avg[k] === undefined ? '' : S.yearAgo[k] === null || S.yearAgo[k] === undefined ? '<span class="na">1年前の記録なし</span>' : `1年前 ${S.yearAgo[k]}（${dlt0(S.yearAgo[k], S.avg[k])}）`;
+  // 集会の会館・Zoom（案内係の LINE の投稿から）。会館は1年前の同じ月とも比べる
+  const sp = (k) => S.split && S.split[k] && S.split[k].hall !== null && S.split[k].hall !== undefined ? S.split[k] : null;
+  const hall = (k) => { const x = sp(k); return x ? `<br>会館 ${x.hall}・Zoom ${x.zoom}${x.n < S.months ? ` <small>（内訳は${x.n}カ月分）</small>` : ''}` : ''; };
+  const hallAgo = (k) => { const x = sp(k); return x && x.base ? `<br>会館 1年前 ${x.base.hall}（${dlt0(x.base.hall, x.hall)}）` : ''; };
   const c = S.changes || {};
   const chg = [`バプテスマ ${c.baptized || 0}名`, c.becameInactive != null ? `不活発になった ${c.becameInactive}名` : '', c.becameActive != null ? `活発になった ${c.becameActive}名` : ''].filter(Boolean);
   return `<div class="card"><h3>${S.visit ? `前回の訪問（${dayRange(S.visit.from, S.visit.to)}）からの変化` : '直近6カ月の変化'}</h3>
@@ -1406,8 +1410,8 @@ function sinceCard(d) {
     </div>
     <div class="tsub">${monthRange(S.from, S.to)}（${S.months}カ月）の平均</div>
     <div class="tiles">
-      ${tl(S.avg.weekend, '週末の集会（1回平均）', ago('weekend'))}
-      ${tl(S.avg.weekday, '週日の集会（1回平均）', ago('weekday'))}
+      ${tl(S.avg.weekend, '週末の集会（1回平均）' + hall('weekend'), ago('weekend') + hallAgo('weekend'))}
+      ${tl(S.avg.weekday, '週日の集会（1回平均）' + hall('weekday'), ago('weekday') + hallAgo('weekday'))}
       ${tl(S.avg.studies, '聖書レッスン（月平均）', ago('studies'))}
       ${tl(S.avg.aux, '補助開拓者（月平均）', ago('aux'))}
     </div>
@@ -1450,6 +1454,10 @@ function drawVisit(d) {
     ${sinceCard(d)}
     <div class="card"><h3>活発な伝道者と集会出席の推移</h3>${lineChart([{ name: '活発な伝道者', values: d.trend.map(t => t.active), color: '#2f5d9b' }, { name: '週末出席', values: d.trend.map(t => t.weekend), color: '#1f7a3a' }, { name: '週日出席', values: d.trend.map(t => t.weekday), color: '#b26a00' }], labels, { mark: mk })}
       ${mk ? '<div class="muted">点線は前回の訪問（その右が訪問の後の月）</div>' : ''}</div>
+    ${d.trend.some(t => t.weekendHall != null || t.weekdayHall != null) ? `<div class="card"><h3>集会の出席：会館とZoom（1回あたりの平均）</h3>
+      <div style="font-size:13px;font-weight:bold;margin-top:4px">週末の集会</div>${stackChart([{ name: '会館', values: d.trend.map(t => t.weekendHall), color: '#2f5d9b' }, { name: 'Zoom', values: d.trend.map(t => t.weekendZoom), color: '#1f7a3a' }], labels, { mark: mk })}
+      <div style="font-size:13px;font-weight:bold;margin-top:8px">週日の集会</div>${stackChart([{ name: '会館', values: d.trend.map(t => t.weekdayHall), color: '#2f5d9b' }, { name: 'Zoom', values: d.trend.map(t => t.weekdayZoom), color: '#1f7a3a' }], labels, { mark: mk })}
+      <div class="muted">案内係が LINE に投稿した会館・Zoom の人数から。棒の高さが1回あたりの合計です。</div></div>` : ''}
     <div class="card"><h3>開拓者の人数</h3>${lineChart([{ name: '正規・特別・宣教者', values: d.trend.map(t => t.pioneers), color: '#2f5d9b' }, { name: '補助開拓者', values: d.trend.map(t => t.aux), color: '#b26a00' }], labels, { zero: true, unit: '人', mark: mk })}
       <div class="muted">その月に報告した人数</div></div>
     <div class="card"><h3>聖書レッスン（会衆全体）</h3>${stackChart([{ name: '正規・特別・宣教者', values: by('pioneer'), color: '#2f5d9b' }, { name: '補助開拓者', values: by('aux'), color: '#b26a00' }, { name: '伝道者', values: by('other'), color: '#8a6fd1' }], labels, { mark: mk })}
