@@ -115,6 +115,16 @@
   .tile .n { font-size:24px; font-weight:bold; color:var(--navy); line-height:1.1; }
   .tile .l { font-size:12px; color:var(--gray); }
   .tile .d { font-size:12px; } .up { color:var(--ok); } .down { color:var(--err); }
+  .tile .d .na, .tile .l small { color:var(--gray); font-size:11px; }
+  .tsub { font-size:12px; color:var(--gray); font-weight:bold; margin:12px 0 6px; }
+  .chg { background:#f3f5f8; border-radius:8px; padding:8px 10px; margin-top:10px; font-size:13px; }
+  .vlog { margin-top:14px; border-top:1px solid var(--line); padding-top:10px; }
+  .vlog .vi { display:flex; align-items:center; gap:6px 10px; padding:7px 0; border-bottom:1px solid #eef1f5; font-size:14px; flex-wrap:wrap; }
+  .vlog .vi .t { flex:1; min-width:160px; }
+  .vlog .vi .btn.sm { margin:0; padding:6px 10px; font-size:13px; }
+  .vlog .vin { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:8px; }
+  .vlog input[type=date] { font-size:16px; padding:6px 8px; border:1px solid var(--line); border-radius:6px; background:#fff; flex:1 1 120px; min-width:0; }
+  .vlog .vin .btn.sm { flex:0 0 auto; }
   .chart { width:100%; height:auto; }
   .att { display:flex; flex-wrap:wrap; gap:6px; }
   .att span { background:#eef1f5; border-radius:14px; padding:4px 10px; font-size:14px; }
@@ -644,6 +654,7 @@ function drawOvStats() {
     const studies = (t) => t && t.studies;
     const labels = T.map(t => t.ym), by = (k) => T.map(t => t.studiesBy ? t.studiesBy[k] : null);
     const y0 = d.years[0], y1 = d.years[1];
+    const yr = y1.from ? monthRange(y1.from, y1.to) : '';
     h += `<div class="card"><h3>${lm}の会衆（締切が過ぎた最後の月）</h3><div class="tiles">
         ${tile(L.active, '活発な伝道者', dlt(P.active, L.active))}
         ${tile(L.weekend, '週末の集会（平均）' + (L.weekendHall != null ? `<br>会館 ${L.weekendHall}・Zoom ${L.weekendZoom}` : ''), dlt(P.weekend, L.weekend))}
@@ -659,9 +670,9 @@ function drawOvStats() {
         <div class="muted">案内係が LINE に投稿した会館・Zoom の人数から。棒の高さが1回あたりの合計です。</div></div>` : ''}
       <div class="card"><h3>開拓者の人数</h3>${lineChart([{ name: '正規・特別・宣教者', values: T.map(t => t.pioneers), color: '#2f5d9b' }, { name: '補助開拓者', values: T.map(t => t.aux), color: '#b26a00' }], labels, { zero: true, unit: '人' })}<div class="muted">その月に報告した人数</div></div>
       <div class="card"><h3>聖書レッスン（会衆全体）</h3>${stackChart([{ name: '正規・特別・宣教者', values: by('pioneer'), color: '#2f5d9b' }, { name: '補助開拓者', values: by('aux'), color: '#b26a00' }, { name: '伝道者', values: by('other'), color: '#8a6fd1' }], labels)}<div class="muted">その月に司会された個別の聖書レッスンの数（色は司会した人の区分）</div></div>
-      <div class="card"><h3>昨年度との比べ（月の平均）</h3><table class="v"><tr><th></th><th>${y0.sy}年度</th><th>${y1.sy}年度</th><th>差</th></tr>
+      <div class="card"><h3>昨年度との比べ（${yr ? yr + 'の同じ月' : '月の平均'}）</h3><table class="v"><tr><th></th><th>${y0.sy}年度</th><th>${y1.sy}年度</th><th>差</th></tr>
         ${[['活発な伝道者', 'active'], ['報告の数', 'reports'], ['週末の集会', 'weekend'], ['週日の集会', 'weekday'], ['聖書レッスン', 'studies'], ['補助開拓者', 'aux'], ['正規・特別・宣教者', 'pioneers']].map(([l, k]) => `<tr><td class="l">${l}</td><td>${y0[k] ?? '—'}</td><td>${y1[k] ?? '—'}</td><td>${dlt(y0[k], y1[k])}</td></tr>`).join('')}</table>
-        <div class="muted" style="margin-top:4px">${y1.sy}年度は${y1.months}カ月分（${lm}まで）の平均です。</div></div>
+        <div class="muted" style="margin-top:4px">どちらも${yr}の${y1.months}カ月の月平均です。「—」は昨年度の同じ月の記録がそろっていないもの（保管期間を過ぎた月・この仕組みを始める前の月）。</div></div>
       <div class="card"><h3>グループ別（${lm}までの3カ月）</h3><table class="v"><tr><th>グループ</th><th>人数</th><th>開拓者</th><th colspan="2">報告率</th><th>レッスン</th></tr>
         ${d.groups.map(g => `<tr><td class="l">${esc(g.group)}</td><td>${g.members}</td><td>${g.pioneers}</td><td>${g.rate}%</td><td style="min-width:60px"><div class="bar"><i style="width:${g.rate}%"></i></div></td><td>${g.studies}</td></tr>`).join('')}</table>
         <div class="muted" style="margin-top:4px">報告率 =（報告あり）÷（活発な人数×3カ月）</div></div>`;
@@ -673,7 +684,7 @@ function drawOvStats() {
       h += `<div class="card"><h3>グループの気にかけたい人</h3>
         <div class="attg">${names.map(g => `<button data-g="${esc(g)}" class="${g === ovsGroup ? 'on' : ''}">${esc(g)}</button>`).join('')}</div>
         ${blocks || '<div class="muted">該当する人はいません</div>'}
-        <div class="ro" style="text-align:left">報告の有無・聖書レッスンの数・バプテスマの日付から機械的に出した一覧です。評価ではありません。</div></div>`;
+        <div class="ro" style="text-align:left">報告の有無・聖書レッスンの数・バプテスマの日付から機械的に出した一覧です。評価ではありません。聖書レッスンの増減は、${y1.months >= 3 ? `今年度（${yr}）と昨年度の同じ月` : '直近6カ月とその前の6カ月'}の月平均で比べています。</div></div>`;
     }
     h += `<div class="ro">${esc(d.generated)} 時点（30分ごとに新しくなります）</div>`;
   }
@@ -853,7 +864,7 @@ function secShowTab(t) {
   document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x.dataset.tab === t));
   ['hub', 'check', 'pioneer', 'pdf', 'setup'].forEach(k => { const el = $('#tab-' + k); if (el) el.style.display = k === t ? '' : 'none'; });
   if (t === 'setup') { loadMapKeyStatus(); loadOvPass(); loadAttHist(); }
-  if (t === 'pdf') loadBackupStatus();
+  if (t === 'pdf') { loadBackupStatus(); loadVisits(); }
 }
 // ------------------------------------------------------------
 // 書記: 監督用のパスワード（初期設定タブ）。パスワードはサーバーにも画面にも残らない（照合用の形だけ）
@@ -963,6 +974,41 @@ function drawBackup() {
   box.innerHTML = h;
   const b = $('#bkStart'); if (b) b.disabled = !!i.job;
   if (i.job && secTab === 'pdf') bkTimer = setTimeout(loadBackupStatus, 20000);   // 保存中は20秒ごとに進み具合を見る
+}
+// ------------------------------------------------------------
+// 書記: 訪問の日付（巡回訪問PDFタブ）。ダッシュボードの「前回の訪問からの変化」に使う
+// ------------------------------------------------------------
+let vlInfo = null, vlLoading = false;
+async function loadVisits() {
+  if (vlLoading) return;
+  vlLoading = true;
+  try { vlInfo = await call({ action: 'visits', op: 'list' }, { quiet: true, retry: true }); }
+  catch (e) { vlInfo = { error: e.message }; }
+  finally { vlLoading = false; drawVisits(); }
+}
+function drawVisits() {
+  const box = $('#vlList'); if (!box) return;
+  const i = vlInfo;
+  if (!i) { box.innerHTML = '<span class="muted">確認中…</span>'; return; }
+  if (i.error) { box.innerHTML = `<div class="msg err">訪問の記録を確認できませんでした（${esc(i.error)}）</div>`; return; }
+  if (!i.visits.length) { box.innerHTML = '<div class="muted">まだ記録がありません。</div>'; return; }
+  box.innerHTML = i.visits.map(v => `<div class="vi"><span class="t"><b>${esc(dayRange(v.from, v.to))}</b>　<span class="muted">${esc(monthJa(v.baseYm))}分までの数字</span>${v.from === i.prev ? '<span class="pill ok">いまの比べる相手</span>' : ''}</span><button class="btn sm sec" data-vldel="${esc(v.from)}">削除</button></div>`).join('') +
+    (i.prev ? '' : '<div class="muted" style="margin-top:4px">記録した訪問は、その訪問のあとの月の数字がそろってから比べる相手になります。</div>');
+  box.querySelectorAll('[data-vldel]').forEach(b => b.onclick = () => removeVisit(b.dataset.vldel));
+}
+async function addVisit() {
+  const from = $('#vlFrom').value, to = $('#vlTo').value || from;
+  if (!from) { toast('訪問の始まりの日を選んでください', 'warn'); return; }
+  const b = $('#vlAdd'); b.disabled = true;
+  try { vlInfo = await call({ action: 'visits', op: 'add', from, to }); drawVisits(); $('#vlFrom').value = ''; $('#vlTo').value = ''; toast('訪問の日付を記録しました'); }
+  catch (e) { toast(e.message, 'err'); }
+  finally { b.disabled = false; }
+}
+async function removeVisit(from) {
+  const v = vlInfo && vlInfo.visits.find(x => x.from === from);
+  if (!confirm((v ? dayRange(v.from, v.to) : from) + ' の訪問の記録を削除しますか？')) return;
+  try { vlInfo = await call({ action: 'visits', op: 'remove', from }); drawVisits(); toast('削除しました'); }
+  catch (e) { toast(e.message, 'err'); }
 }
 async function startBackup() {
   if (!confirm('S-21の個人別の保存を、今すぐ始めますか？\n内容が変わった人だけ作り直します。数分〜十数分かかりますが、この画面を閉じても続きます。')) return;
@@ -1077,7 +1123,12 @@ function drawSecretary(d, stale) {
       <button class="btn sec" id="vpreview">自分で内容を確認する（書記）</button>
       <button class="btn" id="vissue">閲覧URLを発行</button>
       <div id="vres"></div>
-      <button class="btn sm sec" id="vrevoke">発行済みURLを無効にする</button></div>
+      <button class="btn sm sec" id="vrevoke">発行済みURLを無効にする</button>
+      <div class="vlog"><b style="font-size:14px">訪問の日付</b>
+        <p class="muted" style="margin:4px 0">ダッシュボードは「前回の訪問」のときの数字からの変化を表示します。訪問ごとに日付を記録してください（前もって入れてもかまいません）。記録がないときは直近6カ月で表示します。</p>
+        <div id="vlList"><span class="muted">確認中…</span></div>
+        <div class="vin"><input type="date" id="vlFrom" aria-label="訪問の始まりの日"> 〜 <input type="date" id="vlTo" aria-label="訪問の終わりの日"><button class="btn sm" id="vlAdd">記録する</button></div>
+      </div></div>
     <div class="card"><h3>S-21 個人別の保存（毎月20日の夜中に自動）</h3>
       <p class="muted">1人1ファイル（上に昨年度・下に今年度）のS-21を、Googleドライブの「活発（① 正規開拓者・特別開拓者・野外の宣教者／② 他の全ての伝道者：グループ別）」「不活発」のフォルダに、アルファベット順の名前で保存します。万一のときの控えになり、成員が移動したときは、その人のファイルを移動先の会衆に送れます。<br>
       グループの編成・区分が変われば、そのフォルダに移します。内容が変わった人だけ作り直し、古いファイルはゴミ箱へ移します。名簿から外れた人のファイルは「名簿にない人」に移します（消しません）。</p>
@@ -1149,6 +1200,9 @@ function drawSecretary(d, stale) {
   $('#pdf').onclick = () => secMakePdfs(d);
   $('#bkStart').onclick = startBackup;
   drawBackup();
+  $('#vlAdd').onclick = addVisit;
+  $('#vlFrom').onchange = (e) => { const t = $('#vlTo'); if (e.target.value && (!t.value || t.value < e.target.value)) t.value = e.target.value; };
+  drawVisits();
   $('#ovpSet').onclick = setOvPass;
   $('#ahFileBtn').onclick = () => $('#ahFile').click();
   $('#ahFile').onchange = (e) => readAttHistFile(e.target.files[0]);
@@ -1243,6 +1297,15 @@ function drawPioneer(d) {
 // ------------------------------------------------------------
 const chartLegend = (series) => '<div class="lgd">' + series.map(s => `<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join('') + '</div>';
 const chartLabel = (l) => l.slice(2).replace('-', '/');
+/** 前回の訪問の線（mark.ym の月と次の月のあいだ。線より右が前回の訪問の後の月） */
+function chartMark(mark, labels, xAt, slot, P, W, H) {
+  if (!mark) return '';
+  const i = labels.indexOf(mark.ym);
+  if (i < 0 || i >= labels.length - 1) return '';
+  const xm = xAt(i) + slot / 2, right = xm > W * 0.72;
+  return `<line x1="${xm.toFixed(1)}" x2="${xm.toFixed(1)}" y1="${P.t - 4}" y2="${H - P.b}" stroke="#4a5566" stroke-width="1.2" stroke-dasharray="4 3"/>` +
+    `<text x="${(xm + (right ? -5 : 5)).toFixed(1)}" y="${P.t + 9}" font-size="14" font-weight="bold" fill="#4a5566" text-anchor="${right ? 'end' : 'start'}" stroke="#fff" stroke-width="4" paint-order="stroke">${esc(mark.label)}</text>`;
+}
 function lineChart(series, labels, opts) {
   // series: [{name, values:[...], color}] ; simple inline SVG
   opts = opts || {};
@@ -1256,6 +1319,7 @@ function lineChart(series, labels, opts) {
   let g = '';
   [0, 0.5, 1].forEach(f => { const v = min + (max - min) * f; g += `<line x1="${P.l}" x2="${W - P.r}" y1="${y(v)}" y2="${y(v)}" stroke="#e3e7ed"/><text x="${P.l - 4}" y="${y(v) + 4}" font-size="10" text-anchor="end" fill="#6b7684">${Math.round(v)}</text>`; });
   labels.forEach((l, i) => { const last = i === labels.length - 1; if (i % Math.ceil(labels.length / 8) === 0 || last) g += `<text x="${last ? W - P.r : x(i)}" y="${H - 6}" font-size="10" text-anchor="${last ? 'end' : 'middle'}" fill="#6b7684">${chartLabel(l)}</text>`; });
+  g += chartMark(opts.mark, labels, x, (W - P.l - P.r) / Math.max(1, labels.length - 1), P, W, H);
   series.forEach(s => {
     let d = '', pen = false;
     s.values.forEach((v, i) => { if (v === null || v === undefined) { pen = false; return; } d += (pen ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1) + ' '; pen = true; });
@@ -1268,7 +1332,8 @@ function lineChart(series, labels, opts) {
   return chartLegend(series) + `<svg class="chart" viewBox="0 0 ${W} ${H}">${g}</svg>`;
 }
 /** 積み上げ棒グラフ（下から series の順に積む）。棒の高さ＝合計 */
-function stackChart(series, labels) {
+function stackChart(series, labels, opts) {
+  opts = opts || {};
   const W = 600, H = 190, P = { l: 34, r: 8, t: 16, b: 24 };
   const n = labels.length;
   const tot = labels.map((_, i) => series.some(s => s.values[i] !== null && s.values[i] !== undefined) ? series.reduce((a, s) => a + (s.values[i] || 0), 0) : null);
@@ -1281,6 +1346,7 @@ function stackChart(series, labels) {
   let g = '';
   [0, 0.5, 1].forEach(f => { const v = max * f; g += `<line x1="${P.l}" x2="${W - P.r}" y1="${y(v)}" y2="${y(v)}" stroke="#e3e7ed"/><text x="${P.l - 4}" y="${y(v) + 4}" font-size="10" text-anchor="end" fill="#6b7684">${Math.round(v)}</text>`; });
   labels.forEach((l, i) => { const last = i === n - 1; if (i % Math.ceil(n / 8) === 0 || last) g += `<text x="${last ? W - P.r : x(i)}" y="${H - 6}" font-size="10" text-anchor="${last ? 'end' : 'middle'}" fill="#6b7684">${chartLabel(l)}</text>`; });
+  g += chartMark(opts.mark, labels, x, slot, P, W, H);
   let lastI = -1;
   labels.forEach((l, i) => {
     if (tot[i] === null) return; lastI = i;
@@ -1309,10 +1375,50 @@ const VLABELS = [
   { key: 'cat', short: '区分別合計', title: '区分別合計（会衆の伝道者記録）', color: '#8a5a00', bg: '#f5ecdc' },
 ];
 let visTab = 'v1', visDrawn = false, VIS = null, visLabel = 'pioneer', visYear = null;
+const monthJa = (ym) => Number(ym.slice(5)) + '月';
+const monthRange = (a, b) => monthJa(a) + (b && b !== a ? '〜' + monthJa(b) : '');
+/** '2026-10-06','2026-10-11' → '2026/10/6〜10/11' */
+function dayRange(a, b) {
+  const f = (x, y) => { const [Y, M, D] = x.split('-').map(Number); return (y ? Y + '/' : '') + M + '/' + D; };
+  return f(a, true) + (b && b !== a ? '〜' + f(b, a.slice(0, 4) !== b.slice(0, 4)) : '');
+}
+/** 差（0 は ±0） */
+function dlt0(a, b) { if (a === null || b === null || a === undefined || b === undefined) return ''; const x = Math.round((b - a) * 10) / 10; return x ? dlt(a, b) : '±0'; }
+/**
+ * 前回の訪問からの変化（記録がなければ直近6カ月）。その時点の人数は前回の訪問時の月と、
+ * 月で上下するもの（集会・聖書レッスン・補助開拓）は期間の平均を1年前の同じ月と比べる
+ */
+function sinceCard(d) {
+  const S = d.since; if (!S) return '';
+  const b = monthJa(S.baseYm);
+  const tl = (n, l, sub) => `<div class="tile"><div class="n">${n ?? '—'}</div><div class="l">${l}</div>${sub ? `<div class="d">${sub}</div>` : ''}</div>`;
+  const point = (n, l, base) => tl(n, l, base === null || base === undefined ? `<span class="na">${b}の記録なし</span>` : `${b} ${base} から ${dlt0(base, n)}`);
+  const ago = (k) => S.avg[k] === null || S.avg[k] === undefined ? '' : S.yearAgo[k] === null || S.yearAgo[k] === undefined ? '<span class="na">1年前の記録なし</span>' : `1年前 ${S.yearAgo[k]}（${dlt0(S.yearAgo[k], S.avg[k])}）`;
+  const c = S.changes || {};
+  const chg = [`バプテスマ ${c.baptized || 0}名`, c.becameInactive != null ? `不活発になった ${c.becameInactive}名` : '', c.becameActive != null ? `活発になった ${c.becameActive}名` : ''].filter(Boolean);
+  return `<div class="card"><h3>${S.visit ? `前回の訪問（${dayRange(S.visit.from, S.visit.to)}）からの変化` : '直近6カ月の変化'}</h3>
+    <div class="muted" style="margin-bottom:8px">${S.visit ? `前回の訪問の数字は${b}分まででした。今回は${monthJa(S.to)}分まで（締切が過ぎた月）です。` : `前回の訪問の日付が記録されていないため、6カ月前（${b}分）と比べています。`}</div>
+    <div class="tiles">
+      ${point(S.now.active, '活発な伝道者', S.base.active)}
+      ${point(S.now.pioneers, '正規・特別開拓者・宣教者 <small>（その月に報告）</small>', S.base.pioneers)}
+      ${tl(S.now.inactive, '不活発な伝道者', '')}
+      ${tl(d.counts.elders + ' / ' + d.counts.ms, '長老 / 援助奉仕者', '')}
+    </div>
+    <div class="tsub">${monthRange(S.from, S.to)}（${S.months}カ月）の平均</div>
+    <div class="tiles">
+      ${tl(S.avg.weekend, '週末の集会（1回平均）', ago('weekend'))}
+      ${tl(S.avg.weekday, '週日の集会（1回平均）', ago('weekday'))}
+      ${tl(S.avg.studies, '聖書レッスン（月平均）', ago('studies'))}
+      ${tl(S.avg.aux, '補助開拓者（月平均）', ago('aux'))}
+    </div>
+    <div class="chg">この間に　${chg.join('・')}${c.becameActive ? '<br><span class="muted">活発になった人には、伝道を再開した人・新しい伝道者・移って来た人を含みます。</span>' : ''}</div>
+    <div class="muted" style="margin-top:6px">集会や補助開拓は時期で上下するため（記念式のころは補助開拓が増える など）、期間の平均は1年前の同じ月と比べています。「記録なし」は、保管期間を過ぎた月・この仕組みを始める前の月です。</div>
+  </div>`;
+}
 async function renderVisit() {
   app.classList.add('wide');
   const g = ++viewGen;
-  await swr('visit:v2', { action: 'visit' }, (d, st) => {
+  await swr('visit:v3', { action: 'visit' }, (d, st) => {
     if (g !== viewGen || st.failed) return;
     if (!st.stale && !st.changed && visDrawn) return;
     drawVisit(d); visDrawn = true;
@@ -1326,10 +1432,13 @@ function visShowTab(t) {
 }
 function drawVisit(d) {
   VIS = d;
-  if (!visYear || [d.sy - 1, d.sy].indexOf(visYear) < 0) visYear = d.sy;
+  // 今年度がまだ3カ月分ないとき（10月ごろの訪問）は、終わったばかりの昨年度のS-21から開く
+  if (!visYear || [d.sy - 1, d.sy].indexOf(visYear) < 0) visYear = d.years && d.years[1] && d.years[1].months < 3 ? d.sy - 1 : d.sy;
   const labels = d.trend.map(t => t.ym);
   const y0 = d.years[0], y1 = d.years[1];
-  const tile = (n, l, delta) => `<div class="tile"><div class="n">${n ?? '—'}</div><div class="l">${l}</div>${delta ? '<div class="d">昨年度比 ' + delta + '</div>' : ''}</div>`;
+  const mk = d.since && d.since.visit ? { ym: d.since.baseYm, label: '前回の訪問' } : null;
+  const yr = y1.from ? monthRange(y1.from, y1.to) : '';
+  const stBasis = y1.months >= 3 ? `今年度（${yr}）と昨年度の同じ月` : '直近6カ月とその前の6カ月';
   const att = d.attention;
   const attBlock = (title, arr, fmt) => arr && arr.length ? `<details open><summary>${title}（${arr.length}）</summary><div class="att">${arr.map(x => `<span>${esc(x.name)} <small>${esc(x.group || '')}${fmt ? ' ' + fmt(x) : ''}</small></span>`).join('')}</div></details>` : '';
   const by = (k) => d.trend.map(t => t.studiesBy ? t.studiesBy[k] : null);
@@ -1338,23 +1447,16 @@ function drawVisit(d) {
   <div class="sub">${esc(d.congregation)}　${d.sy} 奉仕年度（${ymLabel(d.asOf)} 分まで）　<span class="muted">作成 ${esc(d.generated)}${d.expires ? '／閲覧期限 ' + esc(d.expires) : ''}</span></div>
   <div class="tabs"><button class="on" data-tab="v1">全体</button><button data-tab="v2">${att ? '気にかけたい人' : '活発/不活発'}</button><button data-tab="v3">グループ</button><button data-tab="v4">S-21</button><button data-tab="v5">S-88</button></div>
   <div id="tab-v1">
-    <div class="tiles">
-      ${tile(y1.active, '活発な伝道者（年度平均）', dlt(y0.active, y1.active))}
-      ${tile(y1.weekend, '週末集会 平均出席', dlt(y0.weekend, y1.weekend))}
-      ${tile(y1.weekday, '週日集会 平均出席', dlt(y0.weekday, y1.weekday))}
-      ${tile(y1.studies, '聖書レッスン（月平均）', dlt(y0.studies, y1.studies))}
-      ${tile(d.counts.rp, '正規開拓者', '')}
-      ${tile(y1.aux, '補助開拓者（月平均）', dlt(y0.aux, y1.aux))}
-      ${tile(d.counts.elders + ' / ' + d.counts.ms, '長老 / 援助奉仕者', '')}
-      ${tile(d.counts.inactive, '不活発な伝道者', '')}
-    </div>
-    <div class="card" style="margin-top:12px"><h3>活発な伝道者と集会出席の推移</h3>${lineChart([{ name: '活発な伝道者', values: d.trend.map(t => t.active), color: '#2f5d9b' }, { name: '週末出席', values: d.trend.map(t => t.weekend), color: '#1f7a3a' }, { name: '週日出席', values: d.trend.map(t => t.weekday), color: '#b26a00' }], labels)}</div>
-    <div class="card"><h3>開拓者の人数</h3>${lineChart([{ name: '正規・特別・宣教者', values: d.trend.map(t => t.pioneers), color: '#2f5d9b' }, { name: '補助開拓者', values: d.trend.map(t => t.aux), color: '#b26a00' }], labels, { zero: true, unit: '人' })}
+    ${sinceCard(d)}
+    <div class="card"><h3>活発な伝道者と集会出席の推移</h3>${lineChart([{ name: '活発な伝道者', values: d.trend.map(t => t.active), color: '#2f5d9b' }, { name: '週末出席', values: d.trend.map(t => t.weekend), color: '#1f7a3a' }, { name: '週日出席', values: d.trend.map(t => t.weekday), color: '#b26a00' }], labels, { mark: mk })}
+      ${mk ? '<div class="muted">点線は前回の訪問（その右が訪問の後の月）</div>' : ''}</div>
+    <div class="card"><h3>開拓者の人数</h3>${lineChart([{ name: '正規・特別・宣教者', values: d.trend.map(t => t.pioneers), color: '#2f5d9b' }, { name: '補助開拓者', values: d.trend.map(t => t.aux), color: '#b26a00' }], labels, { zero: true, unit: '人', mark: mk })}
       <div class="muted">その月に報告した人数</div></div>
-    <div class="card"><h3>聖書レッスン（会衆全体）</h3>${stackChart([{ name: '正規・特別・宣教者', values: by('pioneer'), color: '#2f5d9b' }, { name: '補助開拓者', values: by('aux'), color: '#b26a00' }, { name: '伝道者', values: by('other'), color: '#8a6fd1' }], labels)}
+    <div class="card"><h3>聖書レッスン（会衆全体）</h3>${stackChart([{ name: '正規・特別・宣教者', values: by('pioneer'), color: '#2f5d9b' }, { name: '補助開拓者', values: by('aux'), color: '#b26a00' }, { name: '伝道者', values: by('other'), color: '#8a6fd1' }], labels, { mark: mk })}
       <div class="muted">その月に司会された個別の聖書レッスンの数。棒の高さが会衆全体の合計、色の内訳は司会した人の区分です。</div></div>
-    <div class="card"><h3>年度比較（${y0.sy} → ${y1.sy}、同じ月数で比較）</h3><table class="v"><tr><th></th><th>${y0.sy}</th><th>${y1.sy}</th><th>差</th></tr>
-      ${[['活発な伝道者', 'active'], ['報告の数', 'reports'], ['週末出席', 'weekend'], ['週日出席', 'weekday'], ['聖書レッスン', 'studies'], ['補助開拓者', 'aux'], ['正規・特別・宣教者', 'pioneers']].map(([l, k]) => `<tr><td class="l">${l}</td><td>${y0[k] ?? '—'}</td><td>${y1[k] ?? '—'}</td><td>${dlt(y0[k], y1[k])}</td></tr>`).join('')}</table></div>
+    <div class="card"><h3>昨年度との比べ（${yr ? yr + 'の同じ月' : '同じ月'}）</h3><table class="v"><tr><th></th><th>${y0.sy}年度</th><th>${y1.sy}年度</th><th>差</th></tr>
+      ${[['活発な伝道者', 'active'], ['報告の数', 'reports'], ['週末出席', 'weekend'], ['週日出席', 'weekday'], ['聖書レッスン', 'studies'], ['補助開拓者', 'aux'], ['正規・特別・宣教者', 'pioneers']].map(([l, k]) => `<tr><td class="l">${l}</td><td>${y0[k] ?? '—'}</td><td>${y1[k] ?? '—'}</td><td>${dlt(y0[k], y1[k])}</td></tr>`).join('')}</table>
+      <div class="muted" style="margin-top:4px">どちらも${yr}の${y1.months}カ月の月平均です。「—」は昨年度の同じ月の記録がそろっていないもの（保管期間を過ぎた月・この仕組みを始める前の月）。${y1.months < 3 ? `今年度はまだ${y1.months}カ月分です。終わったばかりの${y0.sy}年度の1年間は、上のグラフと「S-21」タブ（${y0.sy}年度で開きます）で見られます。` : ''}</div></div>
   </div>
   <div id="tab-v2" style="display:none">
     ${att ? `
@@ -1366,7 +1468,7 @@ function drawVisit(d) {
     ${attBlock('聖書レッスンが増えた', att.studiesUp, x => x.from + '→' + x.to)}
     ${attBlock('聖書レッスンが減った', att.studiesDown, x => x.from + '→' + x.to)}
     ${attBlock('不活発な伝道者', att.inactive, x => x.sy ? x.sy + '年度〜' : '')}
-    <div class="ro">※ 報告の有無・聖書レッスンの数・時間・バプテスマ日のみから機械的に抽出した一覧です。評価ではありません。</div>` :
+    <div class="ro">※ 報告の有無・聖書レッスンの数・時間・バプテスマ日のみから機械的に抽出した一覧です。評価ではありません。聖書レッスンの増減は、${stBasis}の月平均で比べています。</div>` :
     `<div class="card"><h3>活発 ${d.counts.active} 名 ／ 不活発 ${d.counts.inactive} 名</h3><div class="att">${d.persons.filter(p => !p.active).map(p => `<span>${esc(p.name)} <small>${esc(p.group || '')}</small></span>`).join('') || '不活発な伝道者はいません'}</div>
       <div class="muted" style="margin-top:8px">最後の報告は「S-21」タブの「不活発」ラベルで見られます。</div></div>`}
   </div>
