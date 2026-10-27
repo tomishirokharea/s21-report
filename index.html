@@ -680,6 +680,46 @@ function secShowTab(t) {
   document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x.dataset.tab === t));
   ['hub', 'check', 'pioneer', 'pdf', 'setup'].forEach(k => { const el = $('#tab-' + k); if (el) el.style.display = k === t ? '' : 'none'; });
   if (t === 'setup') loadMapKeyStatus();
+  if (t === 'pdf') loadBackupStatus();
+}
+// ------------------------------------------------------------
+// 書記: S-21 の個人別の保存（巡回訪問PDFタブ）。毎月20日の夜中に自動。ここから今すぐ始めることもできる
+// ------------------------------------------------------------
+let bkInfo = null, bkTimer = null, bkLoading = false;
+async function loadBackupStatus() {
+  if (bkLoading) return;
+  bkLoading = true;
+  try { const r = await call({ action: 's21Backup', op: 'status' }, { quiet: true, retry: true }); bkInfo = r.status; }
+  catch (e) { bkInfo = { error: e.message }; }
+  finally { bkLoading = false; drawBackup(); }
+}
+function drawBackup() {
+  const box = $('#bkStatus'); if (!box) return;
+  clearTimeout(bkTimer);
+  const i = bkInfo;
+  if (!i) { box.innerHTML = '<span class="muted">状態を確認中…</span>'; return; }
+  if (i.error) { box.innerHTML = `<div class="msg err">状態を確認できませんでした（${esc(i.error)}）</div>`; return; }
+  const c = (x) => x ? `新しく作成 ${x.made || 0}・変わりなし ${x.same || 0}・フォルダを移動 ${x.moved || 0}${x.gone ? '・名簿にない人へ ' + x.gone : ''}` : '';
+  let h = '';
+  if (i.job) h += `<div class="msg warn">保存中… <b>${i.job.pos} / ${i.job.total} 人</b>（${esc(i.job.started)} 開始・${esc(i.job.by)}）<br><span class="muted">${c(i.job.counts)}。この画面を閉じても続きます。</span></div>`;
+  if (i.last) {
+    const l = i.last, er = l.errors || [];
+    h += `<div class="msg ${l.aborted ? 'err' : er.length ? 'warn' : 'ok'}">${l.aborted ? '前回は途中で止まりました' : '前回の保存'}: ${esc(l.finished)}（${l.total}人・${esc(l.by)}）<br>${c(l.counts)}${er.length ? `<br>うまく保存できなかった人: ${er.slice(0, 5).map(esc).join('／')}` : ''}</div>`;
+  } else if (!i.job) h += '<div class="muted">まだ保存したことがありません。</div>';
+  h += `<div class="muted" style="margin-top:4px">自動: ${esc(i.schedule)}${i.monthly ? '' : '（自動の登録を確認中）'}</div>`;
+  if (i.folderUrl) h += `<a class="btn sm sec" href="${esc(i.folderUrl)}" target="_blank" style="text-decoration:none">保存フォルダを開く（Googleドライブ）</a>`;
+  box.innerHTML = h;
+  const b = $('#bkStart'); if (b) b.disabled = !!i.job;
+  if (i.job && secTab === 'pdf') bkTimer = setTimeout(loadBackupStatus, 20000);   // 保存中は20秒ごとに進み具合を見る
+}
+async function startBackup() {
+  if (!confirm('S-21の個人別の保存を、今すぐ始めますか？\n内容が変わった人だけ作り直します。数分〜十数分かかりますが、この画面を閉じても続きます。')) return;
+  const b = $('#bkStart'); b.disabled = true;
+  try {
+    const r = await call({ action: 's21Backup', op: 'start' });
+    bkInfo = r.status; drawBackup();
+    toast(r.started ? '保存を始めました（1分ほどで進み始めます）' : (r.message || '始められませんでした'), r.started ? 'ok' : 'warn');
+  } catch (e) { toast(e.message, 'err'); b.disabled = false; }
 }
 // ------------------------------------------------------------
 // 書記: 区域マップ連携キー（初期設定タブ）
@@ -786,6 +826,11 @@ function drawSecretary(d, stale) {
       <button class="btn" id="vissue">閲覧URLを発行</button>
       <div id="vres"></div>
       <button class="btn sm sec" id="vrevoke">発行済みURLを無効にする</button></div>
+    <div class="card"><h3>S-21 個人別の保存（毎月20日の夜中に自動）</h3>
+      <p class="muted">1人1ファイル（上に昨年度・下に今年度）のS-21を、Googleドライブの「活発（① 正規開拓者・特別開拓者・野外の宣教者／② 他の全ての伝道者：グループ別）」「不活発」のフォルダに、アルファベット順の名前で保存します。万一のときの控えになり、成員が移動したときは、その人のファイルを移動先の会衆に送れます。<br>
+      グループの編成・区分が変われば、そのフォルダに移します。内容が変わった人だけ作り直し、古いファイルはゴミ箱へ移します。名簿から外れた人のファイルは「名簿にない人」に移します（消しません）。</p>
+      <div id="bkStatus"><span class="muted">状態を確認中…</span></div>
+      <button class="btn sec" id="bkStart">今すぐ保存する</button></div>
   </div>
   <div id="tab-setup" style="display:none">
     <div class="card"><h3>監督用URL（全グループ共通・1つだけ）</h3>
@@ -835,6 +880,8 @@ function drawSecretary(d, stale) {
   $('#vrevoke').onclick = async () => { try { await call({ action: 'revokeVisitToken' }); toast('無効にしました'); $('#vres').innerHTML = ''; } catch (e) { toast(e.message, 'err'); } };
   $('#vpreview').onclick = () => { location.href = location.pathname + '?api=' + encodeURIComponent(API) + '&t=' + TOKEN + '&mode=visit'; };
   $('#pdf').onclick = () => secMakePdfs(d);
+  $('#bkStart').onclick = startBackup;
+  drawBackup();
 }
 /** 書記: 作成済みPDFの一覧（Driveのリンク） */
 function secPdfList(s) {
