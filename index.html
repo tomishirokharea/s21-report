@@ -784,7 +784,7 @@ function secPdfList(s) {
   const changed = [s.newer ? '報告が ' + s.newer + ' 件追加・変更' : '', s.aggregatedAfter ? '月次集計' : ''].filter(Boolean).join('、');
   return `<div style="margin-top:10px"><b>作成済み</b>　<span class="muted">${s.years.map(esc).join('・')} 年度　${esc(s.generated)}</span>
     ${changed ? `<div class="msg warn">作成後に${changed}がありました。最新にするには作り直してください。</div>` : ''}
-    ${s.files.map(f => `<div class="kv"><div class="k">${esc(f.label)}</div>${f.missing ? '<span class="muted">未作成</span>' : f.empty ? '<span class="muted">該当なし</span>' : `<a href="${esc(f.url)}" target="_blank">${f.pages}ページ</a>`}</div>`).join('')}</div>`;
+    ${s.files.map(f => `<div class="kv"><div class="k">${esc(f.label)}${(f.parts || []).length > 1 ? `<br><span class="muted">${f.parts.map(x => `<a href="${esc(x.url)}" target="_blank">${x.kind === 'orig' ? '元のS-21 ' + esc(x.person) : '作成分 ' + x.pages + 'ページ'}</a>`).join('　')}</span>` : ''}${f.missingOriginals ? `<br><span class="muted" style="color:var(--warn)">元のS-21が見つからない人 ${f.missingOriginals}名（空のS-21にしました）</span>` : ''}</div>${f.missing ? '<span class="muted">未作成</span>' : f.empty ? '<span class="muted">該当なし</span>' : (f.parts || []).length > 1 ? `<span class="muted">${f.parts.length}ファイル</span>` : `<a href="${esc(f.url)}" target="_blank">${f.pages}ページ</a>`}</div>`).join('')}</div>`;
 }
 /** 書記: PDFを区分ごとに順番に作る（1回の処理を短くして、6分の上限にかからないように） */
 async function secMakePdfs(d) {
@@ -1063,6 +1063,13 @@ function lastTxt(r) {
   if (!r) return '';
   return [r.p ? '伝道した' : '伝道なし', r.s ? 'レッスン ' + r.s : '', r.a ? '補助開拓' : '', r.h ? r.h + '時間' : ''].filter(Boolean).join('・') + (r.m ? '　備考: ' + r.m : '');
 }
+/** 取り込んだ元のS-21についての一文（正式なPDFに入っているか） */
+function origTxt(p) {
+  const o = p.original, y = o.sy ? '（' + esc(o.sy) + '年度）' : '';
+  if (o.inPdf === true) return '記録は取り込んだ元のS-21' + y + '。正式なPDFの「不活発」に収録しています。';
+  if (o.inPdf === false) return '取り込んだ元のS-21' + y + 'が取込フォルダに見つからないため、正式なPDFには空のS-21を入れています。';
+  return '記録は取り込んだ元のS-21' + y + '。正式なPDFを作ると「不活発」に収録されます。';
+}
 function inactiveList(list) {
   if (!list.length) return '<div class="muted">不活発な伝道者はいません</div>';
   return `<div class="muted" style="margin-bottom:4px">6カ月以上「伝道した」報告がない人。S-21は不活発になった奉仕年度の分だけ保管します。</div>` +
@@ -1070,6 +1077,7 @@ function inactiveList(list) {
       <div class="pn">${esc(p.name)}${ptags(p)} <small class="muted">${esc(p.group || '')}</small></div>
       <div class="il"><span class="k">最後の報告</span>${p.lastYm ? ymLabel(p.lastYm) + (p.last ? '（' + esc(lastTxt(p.last)) + '）' : '<small class="muted">（内容は保管期間外）</small>') : '記録なし'}</div>
       <div class="il"><span class="k">最後に伝道</span>${p.lastPreachedYm ? ymLabel(p.lastPreachedYm) : '記録なし'}　<span class="k">不活発になった年度</span>${p.inactiveSy ? esc(p.inactiveSy) + '年度' : '—'}</div>
+      ${p.original ? `<div class="il muted">${origTxt(p)}</div>` : ''}
     </div>`).join('');
 }
 function catTable() {
@@ -1094,7 +1102,7 @@ function openPerson(i) {
   bg.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(p.name)}">
     <div class="sh-top"><div><b class="sh-n">${esc(p.name)}</b>${ptags(p)}<div class="muted">${[p.group || '', p.baptism ? 'バプテスマ ' + p.baptism : '', p.active ? (p.cat === 'pioneer' ? '活発①' : '活発②') : '不活発'].filter(Boolean).map(esc).join('　')}</div></div><button class="sh-x" aria-label="閉じる">×</button></div>
     ${!p.active ? `<div class="msg warn" style="margin-top:0">最後の報告 ${p.lastYm ? ymLabel(p.lastYm) + (p.last ? '（' + esc(lastTxt(p.last)) + '）' : '') : 'なし'}<br>最後に伝道 ${p.lastPreachedYm ? ymLabel(p.lastPreachedYm) : 'なし'}　／　不活発になった年度 ${p.inactiveSy ? esc(p.inactiveSy) : '—'}</div>` : ''}
-    ${yrs.length ? yrs.map(yearTable).join('') : '<div class="muted">保管期間内の記録はありません</div>'}
+    ${yrs.length ? yrs.map(yearTable).join('') : p.original ? `<div class="muted">この仕組みには月ごとの記録がありません。${origTxt(p)}</div>` : '<div class="muted">保管期間内の記録はありません</div>'}
   </div>`;
   document.body.appendChild(bg); document.body.style.overflow = 'hidden';
   const close = () => { bg.remove(); document.body.style.overflow = ''; document.removeEventListener('keydown', esc1); };
@@ -1110,34 +1118,58 @@ function pdfBtn(key) {
   const f = pdfFile(key);
   if (!f || f.missing) return '<span class="pdfx muted">PDF未作成</span>';
   if (f.empty) return '<span class="pdfx muted">PDF：該当なし</span>';
-  return `<button class="pdfb" data-pdf="${key}">PDF<small>${f.pages}ページ</small></button>`;
+  const unknown = (f.parts || []).some(x => !x.pages);
+  return `<button class="pdfb" data-pdf="${key}">PDF<small>${unknown ? (f.parts || []).length + 'ファイル分' : f.pages + 'ページ'}</small></button>`;
 }
 function pdfCardHtml(d) {
   const s = d.pdfs;
   if (!s || !s.ready) return `<div class="card pdfc"><h3>正式な記録（PDF）</h3><div class="muted">まだ作成されていません。書記が作成すると、ここからダウンロードできます。</div></div>`;
   const files = s.files.filter(f => !f.missing && !f.empty), pages = files.reduce((a, f) => a + (f.pages || 0), 0);
+  const unknown = files.some(f => (f.parts || []).some(x => !x.pages));
   const changed = [s.newer ? '報告が ' + s.newer + ' 件追加・変更' : '', s.aggregatedAfter ? '月次集計（活発／不活発の判定）' : ''].filter(Boolean).join('、');
   return `<div class="card pdfc"><h3>正式な記録（PDF）</h3>
     <div class="muted">S-21（公式様式・1人1ページ）と S-88　${s.years.map(esc).join('・')} 奉仕年度　作成 ${esc(s.generated)}</div>
     ${changed ? `<div class="msg warn">PDFの作成後に、${changed}がありました。この画面の表は最新ですが、PDFは作成時点の内容です。</div>` : ''}
     ${s.missing ? '<div class="msg warn">一部のPDFがまだ作成されていません。</div>' : ''}
-    <button class="btn" id="pdfAll">まとめて1つのPDFで保存<small>（全 ${pages} ページ・綴じる順）</small></button>
+    ${files.some(f => f.missingOriginals) ? '<div class="msg warn">不活発な人の元のS-21が取込フォルダに見つからなかった人がいます（空のS-21にしています）。</div>' : ''}
+    <button class="btn" id="pdfAll">まとめて1つのPDFで保存<small>（${unknown ? '' : '全 ' + pages + ' ページ・'}綴じる順）</small></button>
     <details class="pdfl"><summary>ファイルごとに保存</summary>${s.files.map(f => `<div class="pf"><span>${esc(f.label)}</span>${pdfBtn(f.key)}</div>`).join('')}</details>
   </div>`;
 }
 const PDFQ = {};
 function b64bytes(b64) { const bin = atob(b64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; }
+/**
+ * 区分のPDFを取る。不活発は「作ったS-21」と「元のS-21（取り込んだPDFのコピー）」の複数のファイルなので、
+ * 1つずつ取ってこの端末で綴じる順（ローマ字順）に1つにまとめる
+ */
 function fetchPdf(key) {
   const f = pdfFile(key), k = key + '|' + (f ? f.generated : '');
-  if (!PDFQ[k]) PDFQ[k] = call({ action: 'visitPdf', key }, { quiet: true }).then(r => ({ name: r.name, bytes: b64bytes(r.data) })).catch(e => { delete PDFQ[k]; throw e; });
+  if (!PDFQ[k]) PDFQ[k] = (async () => {
+    const n = f && f.parts ? f.parts.length : 1;
+    if (n <= 1 && !(f && f.order)) { const r = await call({ action: 'visitPdf', key }, { quiet: true }); return { name: r.name, bytes: b64bytes(r.data) }; }
+    const raw = [];
+    for (let i = 0; i < n; i++) { const r = await call({ action: 'visitPdf', key, part: i }, { quiet: true }); raw.push(b64bytes(r.data)); }
+    const { PDFDocument } = await loadPdfLib();
+    const out = await PDFDocument.create(), docs = [], bad = [];
+    for (const it of (f.order || raw.map((_, i) => ({ i, p: null })))) {
+      if (!(it.i >= 0) || !raw[it.i]) continue;
+      try {
+        const src = docs[it.i] || (docs[it.i] = await PDFDocument.load(raw[it.i], { ignoreEncryption: true }));
+        (await out.copyPages(src, it.p || src.getPageIndices())).forEach(pg => out.addPage(pg));
+      } catch (e) { bad.push((f.parts[it.i] || {}).person || (f.parts[it.i] || {}).name || it.i); }
+    }
+    if (bad.length) toast('次の元のS-21をまとめられませんでした: ' + bad.join('・') + '（書記の出力フォルダにあります）', 'warn');
+    return { name: f.name, bytes: await out.save() };
+  })().catch(e => { delete PDFQ[k]; throw e; });
   return PDFQ[k];
 }
 /** 保存する。自動で始まらない端末のために、押せる保存リンクもボタンの下に出す */
 function saveBytes(bytes, name, near) {
   const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
   const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
-  let link = near.parentElement.querySelector('a.pdfget');
-  if (!link) { link = document.createElement('a'); link.className = 'pdfget'; near.insertAdjacentElement('afterend', link); }
+  const at = near.closest('.fhead') || near;   // 見出しの横ではなく下に出す
+  let link = at.nextElementSibling && at.nextElementSibling.matches('a.pdfget') ? at.nextElementSibling : null;
+  if (!link) { link = document.createElement('a'); link.className = 'pdfget'; at.insertAdjacentElement('afterend', link); }
   link.href = url; link.download = name; link.textContent = '⤓ ' + name + '（保存が始まらないときはここを押す）';
 }
 function bindPdfButtons(root) {
