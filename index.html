@@ -107,6 +107,82 @@
   .bar { height:8px; background:#e9eff7; border-radius:4px; overflow:hidden; } .bar i { display:block; height:100%; background:var(--blue); }
   details { margin:6px 0; } summary { cursor:pointer; font-weight:bold; color:var(--navy); }
   .ro { font-size:12px; color:var(--gray); text-align:center; margin:8px 0; }
+  .lgd { font-size:12px; color:#4a5566; display:flex; flex-wrap:wrap; gap:4px 12px; margin-bottom:2px; }
+  .lgd i { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:4px; vertical-align:-1px; }
+  .btn small { font-weight:normal; font-size:12px; }
+  /* 巡回訪問: S-21 のラベル（ファイルの見出しラベルのように開く） */
+  .folder { margin-top:4px; }
+  .ftabs { display:flex; align-items:flex-end; gap:3px; padding:0 6px; overflow-x:auto; scrollbar-width:none; position:relative; z-index:2; margin-bottom:-1px; }
+  .ftabs::-webkit-scrollbar { display:none; }
+  .ftab { flex:0 0 auto; border:1px solid var(--line); border-bottom:none; border-radius:9px 9px 0 0; background:var(--bg2); color:#4a5566; padding:7px 11px 5px; margin-top:7px; font-size:13px; line-height:1.25; text-align:left; box-shadow:inset 0 3px 0 var(--c); cursor:pointer; font-family:inherit; }
+  .ftab small { display:block; font-size:11px; color:var(--gray); }
+  .ftab.on { background:#fff; color:var(--navy); font-weight:bold; padding:10px 14px 8px; margin-top:0; border-bottom:1px solid #fff; box-shadow:inset 0 4px 0 var(--c); }
+  .fpanel { position:relative; z-index:1; background:#fff; border:1px solid var(--line); border-radius:4px 10px 10px 10px; padding:12px; margin-bottom:12px; }
+  .fhead { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+  .fhead h3 { margin:2px 0 8px; font-size:14px; }
+  .fhead .dot { display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--c); margin-right:6px; }
+  .seg { display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; margin:0 0 10px; }
+  .seg button { border:none; background:#fff; padding:7px 12px; font-size:13px; color:#4a5566; font-family:inherit; cursor:pointer; }
+  .seg button + button { border-left:1px solid var(--line); }
+  .seg button.on { background:var(--navy); color:#fff; font-weight:bold; }
+  .seg button small { font-weight:normal; font-size:11px; }
+  .gridwrap { overflow-x:auto; -webkit-overflow-scrolling:touch; border:1px solid var(--line); border-radius:6px; }
+  table.s21t { border-collapse:separate; border-spacing:0; font-size:12px; min-width:100%; }
+  table.s21t th, table.s21t td { border-bottom:1px solid #e6eaf0; border-right:1px solid #eef1f5; padding:4px 3px; text-align:center; white-space:nowrap; min-width:40px; vertical-align:middle; }
+  table.s21t th { background:#f3f6fa; color:#4a5566; font-weight:bold; }
+  table.s21t th small { display:block; font-weight:normal; font-size:10px; }
+  table.s21t .stk { position:sticky; left:0; z-index:1; background:#fff; text-align:left; min-width:112px; max-width:150px; white-space:normal; border-right:1px solid var(--line); padding:5px 6px; }
+  table.s21t th.stk { background:#f3f6fa; }
+  table.s21t tr.pr { cursor:pointer; }
+  table.s21t tr.pr:active td { background:#f3f6fa; }
+  table.s21t .pn { font-size:13px; font-weight:bold; line-height:1.3; }
+  table.s21t .pgr { font-size:11px; color:var(--gray); }
+  table.s21t .pt { font-size:11px; color:#4a5566; }
+  table.s21t .pt span { white-space:nowrap; }
+  #pdfAll small { display:block; }
+  table.s21t tr.gh td { background:#f1f7f3; padding:0; text-align:left; cursor:pointer; border-bottom:1px solid #d6e6db; }
+  table.s21t .ghi { position:sticky; left:0; display:inline-block; padding:7px 8px; font-size:13px; }
+  table.s21t .ghi .ar { display:inline-block; color:#1f7a3a; transition:transform .15s; }
+  table.s21t tbody.shut tr:not(.gh) { display:none; }
+  table.s21t tbody.shut .ar { transform:rotate(-90deg); }
+  table.s21t td.fut { background:repeating-linear-gradient(45deg,#fbfcfd,#fbfcfd 4px,#f2f4f7 4px,#f2f4f7 8px); }
+  table.s21t td.np { color:#b5bcc8; }
+  table.s21t tr.tot td { font-weight:bold; background:#f8fafc; }
+  table.s21t.cat th.c1 { box-shadow:inset 0 3px 0 #2f5d9b; } table.s21t.cat th.c2 { box-shadow:inset 0 3px 0 #b26a00; } table.s21t.cat th.c3 { box-shadow:inset 0 3px 0 #1f7a3a; }
+  .cl div { line-height:1.35; }
+  .cl i { font-style:normal; display:inline-block; }
+  .cl .ck { color:var(--ok); }
+  .cl .ax { font-size:10px; color:#fff; background:#b26a00; border-radius:3px; padding:0 3px; margin-left:2px; line-height:1.4; }
+  .cl .ls { min-width:16px; height:16px; line-height:16px; border-radius:8px; background:#e4f1e8; color:#1f7a3a; font-size:11px; font-weight:bold; padding:0 4px; text-align:center; }
+  .cl .hr { font-size:11px; color:var(--blue); margin-left:3px; }
+  .tg2 { display:inline-block; font-size:10px; background:#e9eff7; color:var(--navy); border-radius:6px; padding:0 5px; margin-left:4px; vertical-align:middle; font-weight:normal; }
+  .irow { padding:10px 2px; border-bottom:1px solid var(--line); cursor:pointer; }
+  .irow:active { background:#f3f6fa; }
+  .irow .pn { font-weight:bold; }
+  .irow .il { font-size:13px; margin-top:3px; }
+  .irow .k { display:inline-block; font-size:11px; color:var(--gray); background:#f1f3f6; border-radius:4px; padding:0 5px; margin-right:5px; }
+  .pdfb { flex-shrink:0; border:1px solid var(--blue); background:#fff; color:var(--blue); border-radius:8px; padding:4px 10px; font-size:13px; font-weight:bold; line-height:1.15; cursor:pointer; font-family:inherit; }
+  .pdfb small { display:block; font-weight:normal; font-size:10px; }
+  .pdfb:disabled { opacity:.6; }
+  .pdfx { font-size:12px; white-space:nowrap; }
+  a.pdfget { display:block; margin:6px 0; font-size:13px; word-break:break-all; }
+  .pdfc .pdfl .pf { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 0; border-bottom:1px solid #eef1f5; font-size:13px; font-weight:normal; }
+  .pdfc .pdfl summary { font-size:14px; }
+  .lgd2 .cl { display:inline; }
+  /* 1人分の記録（下から出るシート） */
+  .sheet-bg { position:fixed; inset:0; background:rgba(20,30,45,.4); z-index:40; display:flex; align-items:flex-end; justify-content:center; }
+  .sheet { background:#fff; width:100%; max-width:640px; max-height:90vh; overflow:auto; border-radius:14px 14px 0 0; padding:14px 14px calc(20px + env(safe-area-inset-bottom)); box-shadow:0 -4px 20px rgba(0,0,0,.15); }
+  @media (min-width:700px) { .sheet-bg { align-items:center; } .sheet { border-radius:14px; } }
+  .sh-top { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:6px; }
+  .sh-n { font-size:18px; }
+  .sh-x { border:none; background:#eef1f5; border-radius:50%; width:36px; height:36px; font-size:20px; line-height:1; cursor:pointer; flex-shrink:0; }
+  .sheet h4 { margin:14px 0 4px; font-size:14px; color:var(--navy); }
+  table.s21m { width:100%; border-collapse:collapse; font-size:13px; }
+  table.s21m th, table.s21m td { border:1px solid var(--line); padding:4px; text-align:center; }
+  table.s21m th { background:#f3f6fa; font-size:11px; line-height:1.25; }
+  table.s21m td.rm { text-align:left; font-size:12px; word-break:break-all; }
+  table.s21m tr.fut td { color:#c0c6cf; background:#fafbfc; }
+  table.s21m tr.tot td { font-weight:bold; background:#f8fafc; }
   @media print { .noprint, .tabs, h1, .sub, #toast, #sync { display:none !important; } body { background:#fff; } .card { border:none; } #tab-pioneer { display:block !important; } #tab-hub, #tab-check, #tab-pdf, #tab-setup { display:none !important; } }
   #toast { position:fixed; top:10px; left:50%; transform:translateX(-50%); z-index:20; width:calc(100% - 32px); max-width:600px; box-shadow:0 2px 10px rgba(0,0,0,.15); }
   #loading { position:fixed; inset:0; background:rgba(255,255,255,.6); display:none; align-items:center; justify-content:center; gap:10px; font-weight:bold; color:var(--navy); z-index:30; }
@@ -152,7 +228,7 @@ function loading(on) {
 function syncBadge(on) { $('#sync').classList.toggle('on', !!on); }
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 // 読むだけの呼び出しは、通信の失敗や混雑のとき 1 回だけ自動でやり直す
-const READ_ACTIONS = { me: 1, overseer: 1, secretary: 1, pioneerReview: 1, visit: 1 };
+const READ_ACTIONS = { me: 1, overseer: 1, secretary: 1, pioneerReview: 1, visit: 1, visitPdf: 1 };
 async function call(payload, opt) {
   opt = opt || {};
   if (!API) throw new Error('接続先(api)が指定されていません。配布されたURLから開いてください。');
@@ -249,7 +325,7 @@ async function renderPersonal(ym) {
   }, { alsoKey: d => 'me:' + d.ym });
 }
 function personalSubnote(r) { return r.submitted ? `<div class="muted" style="margin-top:8px">提出済み: ${esc(r.submitted)}（${r.source === 'overseer' ? '監督入力' : r.source === 'import' ? '取込' : r.source === 'map' ? '区域マップ' : '本人'}）。送信すると上書きされます。</div>` : ''; }
-function personalHist(d) { return `<table class="hist"><tr><th>月</th><th>伝道</th><th>研究</th><th>補助</th><th>時間</th></tr>
+function personalHist(d) { return `<table class="hist"><tr><th>月</th><th>伝道</th><th>レッスン</th><th>補助</th><th>時間</th></tr>
   ${(d.recent || []).slice(1, 7).map(x => `<tr><td>${ymLabel(x.ym)}</td><td>${x.empty ? '—' : x.preached ? '✓' : ''}</td><td>${x.empty ? '' : x.studies || ''}</td><td>${x.empty ? '' : x.aux ? '✓' : ''}</td><td>${x.empty ? '' : x.hours || ''}</td></tr>`).join('')}</table>`; }
 function personalMeta(d) { const s = $('#subnote'), h = $('#hist'); if (s) s.innerHTML = personalSubnote(d.report || {}); if (h) h.innerHTML = personalHist(d); }
 function sendReady(on) { const b = $('#send'); if (!b) return; b.disabled = !on; b.textContent = on ? '送信' : '最新の状態を確認中…'; }
@@ -265,7 +341,7 @@ function drawPersonal(d, stale) {
     <div class="field"><b>氏名:</b><div class="v">${esc(p.name)}</div></div>
     <div class="field"><b>月:</b><div class="v" style="border:none;padding:0"><select id="ym">${opts.map(y => `<option value="${y}" ${y === d.ym ? 'selected' : ''}>${ymLabel(y)}</option>`).join('')}</select></div></div>
     <div class="row"><div class="lab">1カ月間に何らかの形で伝道したならチェックを入れてください</div><div class="chk ${r.preached ? 'on' : ''}" id="preached">${r.preached ? '✓' : ''}</div></div>
-    <div class="row"><div class="lab">司会した<b>個別の</b>聖書研究の数</div><input type="number" id="studies" inputmode="numeric" min="0" value="${r.studies ?? ''}"></div>
+    <div class="row"><div class="lab">司会した<b>個別の</b>聖書レッスンの数</div><input type="number" id="studies" inputmode="numeric" min="0" value="${r.studies ?? ''}"></div>
     <div class="row ${p.pioneer ? '' : ''}"><div class="lab">補助開拓者として奉仕した</div><div class="tg ${r.aux ? 'on' : ''}" id="aux"></div></div>
     <div class="row ${p.pioneer || r.aux ? '' : 'disabled'}" id="hoursRow"><div class="lab">時間<br><span class="muted">（補助開拓者, 正規開拓者, 特別開拓者, 野外の宣教者は記入してください）</span></div><input type="number" id="hours" inputmode="numeric" min="0" value="${r.hours || ''}" ${p.pioneer || r.aux ? '' : 'disabled'}></div>
     ${p.pioneer ? `<div class="row"><div class="lab">承認された活動の時間<br><span class="muted">（LDC等。任意。報告には含まれず備考に記録）</span></div><input type="number" id="actHours" inputmode="numeric" min="0" value="${r.actHours || ''}"></div>` : ''}
@@ -354,7 +430,7 @@ function drawOverseer(d, stale) {
     <details class="card grp" id="g-${gi}" data-group="${esc(g.group)}">
       <summary><b class="gname">${esc(g.group)}</b><span class="muted">${g.overseers.map(esc).join('・')}</span><span class="gcount" id="gh-${gi}"></span></summary>
       <div class="gbody">
-        <div class="memh"><span>氏名</span><span>伝道</span><span>研究</span><span>補助</span><span>時間</span></div>
+        <div class="memh"><span>氏名</span><span>伝道</span><span>レッスン</span><span>補助</span><span>時間</span></div>
         ${g.members.map(m => memberRow(m)).join('')}
         <div class="msg warn" id="gu-${gi}"></div>
         <button class="btn sec" data-close="${gi}">${esc(g.group)}の月締め完了</button>
@@ -445,7 +521,7 @@ function memberRow(m) {
   </div>`;
 }
 // 監督画面の保存は、画面を止めずに裏で順番に送る。
-// 同じ行を続けて変えたとき（チェック→研究数→備考 など）は、最後の内容を1回だけ送る。
+// 同じ行を続けて変えたとき（チェック→レッスン数→備考 など）は、最後の内容を1回だけ送る。
 const SQ = { jobs: new Map(), running: null, timer: null, failed: new Set() };
 function saveMark(el, s) {
   const sv = $('.sv', el); if (!sv) return;
@@ -566,11 +642,11 @@ function drawSecretary(d, stale) {
       <div>
         <div class="card"><h3>活発な伝道者全員</h3>${kv('過去6カ月に報告あり', d.hub.activeCount)}</div>
         <div class="card"><h3>週末の集会の平均出席者数</h3>${kv('S-88より', d.hub.weekendAvg, we ? we.count + '回・合計 ' + we.total : '出席データなし')}</div>
-        <div class="card"><h3>伝道者</h3>${kv('報告の数', d.hub.publishers.count)}${kv('聖書研究', d.hub.publishers.studies)}</div>
+        <div class="card"><h3>伝道者</h3>${kv('報告の数', d.hub.publishers.count)}${kv('聖書レッスン', d.hub.publishers.studies)}</div>
       </div>
       <div>
-        <div class="card"><h3>補助開拓者</h3>${kv('報告の数', d.hub.aux.count)}${kv('時間', d.hub.aux.hours)}${kv('聖書研究', d.hub.aux.studies)}</div>
-        <div class="card"><h3>正規開拓者</h3>${kv('報告の数', d.hub.rp.count)}${kv('時間', d.hub.rp.hours)}${kv('聖書研究', d.hub.rp.studies)}</div>
+        <div class="card"><h3>補助開拓者</h3>${kv('報告の数', d.hub.aux.count)}${kv('時間', d.hub.aux.hours)}${kv('聖書レッスン', d.hub.aux.studies)}</div>
+        <div class="card"><h3>正規開拓者</h3>${kv('報告の数', d.hub.rp.count)}${kv('時間', d.hub.rp.hours)}${kv('聖書レッスン', d.hub.rp.studies)}</div>
       </div>
     </div>
     <div class="muted">※ 遅延提出 ${d.lateCount} 件を加算済み ／ 特別開拓者・野外の宣教者は除外 ／ 加算時間 ${d.credit}h は報告に含めず ／ 週日集会: ${wd ? wd.count + '回・平均 ' + wd.avg : '—'}</div>
@@ -592,11 +668,13 @@ function drawSecretary(d, stale) {
     <div id="prOut"></div>
   </div>
   <div id="tab-pdf" style="display:none">
-    <div class="card"><h3>巡回訪問用PDF</h3><p>S-21個人別（活発→不活発、グループ別）・S-21区分別合計（3枚）・S-88 を、出力フォルダに保存します。</p>
+    <div class="card"><h3>巡回訪問用PDF（正式な記録）</h3>
+      <p class="muted">S-21を保管の分け方どおり「活発① 開拓者」「活発② 他の伝道者（グループ別・グループごとに改ページ）」「不活発」「区分別合計」に分けて作り、S-88と合わせて出力フォルダに保存します。1人1ページ（上下に昨年度・今年度）。<br>
+      作ったPDFは巡回訪問ダッシュボードからもダウンロードできるので、巡回監督には閲覧URLを送るだけで済みます。前回作ったPDF（別の年度・以前の形式のものを含む）は、作り直したときにゴミ箱へ移します。</p>
       <div>年度: <input type="text" id="years" value="${d.years.join(',')}" style="width:160px;display:inline-block"></div>
-      <button class="btn" id="pdf">PDFを出力</button><div id="pdfres"></div></div>
+      <button class="btn" id="pdf">PDFを作成</button><div id="pdfres">${secPdfList(d.pdfs)}</div></div>
     <div class="card"><h3>巡回訪問ダッシュボード（閲覧URL）</h3>
-      <p class="muted">推移・グループ別・S-21/S-88一覧をスマホで見られる閲覧専用ページ。期限が来ると自動で無効になります。</p>
+      <p class="muted">推移・グループ別・S-21/S-88一覧（今年度・昨年度）をスマホで見られる閲覧専用ページ。上で作成した正式なPDFもここからダウンロードできます。期限が来ると自動で無効になります。</p>
       <div>有効日数: <input type="number" id="vdays" value="14" style="width:80px;display:inline-block">　
         <label><input type="checkbox" id="vatt"> 「気にかけたい人」を含める（長老団の決定後にON）</label></div>
       <button class="btn sec" id="vpreview">自分で内容を確認する（書記）</button>
@@ -639,7 +717,33 @@ function drawSecretary(d, stale) {
   $('#vissue').onclick = async () => { try { const r = await call({ action: 'issueVisitToken', days: $('#vdays').value, showAttention: $('#vatt').checked }); $('#vres').innerHTML = `<div class="msg ok">期限 ${esc(r.expires)} まで有効</div><input type="text" value="${esc(r.url)}" readonly onclick="this.select()">`; } catch (e) { toast(e.message, 'err'); } };
   $('#vrevoke').onclick = async () => { try { await call({ action: 'revokeVisitToken' }); toast('無効にしました'); $('#vres').innerHTML = ''; } catch (e) { toast(e.message, 'err'); } };
   $('#vpreview').onclick = () => { location.href = location.pathname + '?api=' + encodeURIComponent(API) + '&t=' + TOKEN + '&mode=visit'; };
-  $('#pdf').onclick = async () => { try { const r = await call({ action: 'exportPdf', years: $('#years').value.split(/[,\s]+/).filter(Boolean) }); $('#pdfres').innerHTML = r.files.map(f => `<div><a href="${f.url}" target="_blank">${esc(f.name)}</a></div>`).join(''); toast('PDFを出力しました'); } catch (e) { toast(e.message, 'err'); } };
+  $('#pdf').onclick = () => secMakePdfs(d);
+}
+/** 書記: 作成済みPDFの一覧（Driveのリンク） */
+function secPdfList(s) {
+  if (!s || !s.files || !s.files.some(f => !f.missing)) return '<div class="muted" style="margin-top:8px">まだ作成していません。</div>';
+  const changed = [s.newer ? '報告が ' + s.newer + ' 件追加・変更' : '', s.aggregatedAfter ? '月次集計' : ''].filter(Boolean).join('、');
+  return `<div style="margin-top:10px"><b>作成済み</b>　<span class="muted">${s.years.map(esc).join('・')} 年度　${esc(s.generated)}</span>
+    ${changed ? `<div class="msg warn">作成後に${changed}がありました。最新にするには作り直してください。</div>` : ''}
+    ${s.files.map(f => `<div class="kv"><div class="k">${esc(f.label)}</div>${f.missing ? '<span class="muted">未作成</span>' : f.empty ? '<span class="muted">該当なし</span>' : `<a href="${esc(f.url)}" target="_blank">${f.pages}ページ</a>`}</div>`).join('')}</div>`;
+}
+/** 書記: PDFを区分ごとに順番に作る（1回の処理を短くして、6分の上限にかからないように） */
+async function secMakePdfs(d) {
+  const years = $('#years').value.split(/[,\s、]+/).filter(Boolean);
+  const btn = $('#pdf'), parts = [['pioneer', '活発① 開拓者'], ['other', '活発② 他の伝道者'], ['inactive', '不活発'], ['cat', '区分別合計'], ['s88', 'S-88']];
+  btn.disabled = true;
+  try {
+    for (let i = 0; i < parts.length; i++) {
+      btn.textContent = `作成中… ${i + 1} / ${parts.length}（${parts[i][1]}）`;
+      await call({ action: 'exportPdf', years, part: parts[i][0] }, { quiet: true });
+    }
+    btn.textContent = '仕上げ中…';
+    const r = await call({ action: 'exportPdf', years, part: 'cleanup' }, { quiet: true });
+    d.pdfs = r.status; cacheSet('sec:' + d.ym, d);
+    if ($('#pdfres')) $('#pdfres').innerHTML = secPdfList(r.status);
+    toast('PDFを作成しました' + (r.trashed ? '（古いPDF ' + r.trashed + '件をゴミ箱へ）' : ''));
+  } catch (e) { toast(e.message, 'err'); }
+  finally { btn.disabled = false; btn.textContent = 'PDFを作成'; }
 }
 
 
@@ -698,34 +802,78 @@ function drawPioneer(d) {
 // ------------------------------------------------------------
 // 巡回訪問ダッシュボード（閲覧専用）
 // ------------------------------------------------------------
+const chartLegend = (series) => '<div class="lgd">' + series.map(s => `<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join('') + '</div>';
+const chartLabel = (l) => l.slice(2).replace('-', '/');
 function lineChart(series, labels, opts) {
   // series: [{name, values:[...], color}] ; simple inline SVG
+  opts = opts || {};
   const W = 600, H = 180, P = { l: 34, r: 8, t: 10, b: 24 };
   const all = series.flatMap(s => s.values).filter(v => v !== null && v !== undefined);
   if (!all.length) return '<div class="muted">データなし</div>';
-  let max = Math.max(...all), min = (opts && opts.zero) ? 0 : Math.min(...all);
+  let max = Math.max(...all), min = opts.zero ? 0 : Math.min(...all);
   if (max === min) { max += 1; min = Math.max(0, min - 1); }
   const x = (i) => P.l + (W - P.l - P.r) * (labels.length <= 1 ? 0 : i / (labels.length - 1));
   const y = (v) => P.t + (H - P.t - P.b) * (1 - (v - min) / (max - min));
   let g = '';
   [0, 0.5, 1].forEach(f => { const v = min + (max - min) * f; g += `<line x1="${P.l}" x2="${W - P.r}" y1="${y(v)}" y2="${y(v)}" stroke="#e3e7ed"/><text x="${P.l - 4}" y="${y(v) + 4}" font-size="10" text-anchor="end" fill="#6b7684">${Math.round(v)}</text>`; });
-  labels.forEach((l, i) => { if (i % Math.ceil(labels.length / 8) === 0 || i === labels.length - 1) g += `<text x="${x(i)}" y="${H - 6}" font-size="10" text-anchor="middle" fill="#6b7684">${l.slice(2).replace('-', '/')}</text>`; });
+  labels.forEach((l, i) => { const last = i === labels.length - 1; if (i % Math.ceil(labels.length / 8) === 0 || last) g += `<text x="${last ? W - P.r : x(i)}" y="${H - 6}" font-size="10" text-anchor="${last ? 'end' : 'middle'}" fill="#6b7684">${chartLabel(l)}</text>`; });
   series.forEach(s => {
     let d = '', pen = false;
     s.values.forEach((v, i) => { if (v === null || v === undefined) { pen = false; return; } d += (pen ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1) + ' '; pen = true; });
     g += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2"/>`;
-    s.values.forEach((v, i) => { if (v !== null && v !== undefined) g += `<circle cx="${x(i)}" cy="${y(v)}" r="2" fill="${s.color}"/>`; });
+    s.values.forEach((v, i) => { if (v !== null && v !== undefined) g += `<circle cx="${x(i)}" cy="${y(v)}" r="2.5" fill="${s.color}"/>`; });
   });
-  const legend = series.map(s => `<span style="color:${s.color};font-size:12px;margin-right:10px">● ${esc(s.name)}</span>`).join('');
-  return `<div>${legend}</div><svg class="chart" viewBox="0 0 ${W} ${H}">${g}</svg>`;
+  // 月ごとの当たり判定（触れると値が出る）
+  const slot = (W - P.l - P.r) / Math.max(1, labels.length - 1);
+  labels.forEach((l, i) => { const vals = series.filter(s => s.values[i] !== null && s.values[i] !== undefined); if (!vals.length) return; g += `<rect x="${(x(i) - slot / 2).toFixed(1)}" y="${P.t}" width="${slot.toFixed(1)}" height="${H - P.t - P.b}" fill="transparent"><title>${ymLabel(l)}\n${vals.map(s => s.name + ' ' + s.values[i] + (opts.unit || '')).join('\n')}</title></rect>`; });
+  return chartLegend(series) + `<svg class="chart" viewBox="0 0 ${W} ${H}">${g}</svg>`;
+}
+/** 積み上げ棒グラフ（下から series の順に積む）。棒の高さ＝合計 */
+function stackChart(series, labels) {
+  const W = 600, H = 190, P = { l: 34, r: 8, t: 16, b: 24 };
+  const n = labels.length;
+  const tot = labels.map((_, i) => series.some(s => s.values[i] !== null && s.values[i] !== undefined) ? series.reduce((a, s) => a + (s.values[i] || 0), 0) : null);
+  const all = tot.filter(v => v !== null);
+  if (!all.length) return '<div class="muted">データなし</div>';
+  const raw = Math.max(...all, 1), step = raw <= 10 ? 2 : raw <= 40 ? 5 : raw <= 100 ? 10 : 20, max = Math.ceil(raw / step) * step;
+  const slot = (W - P.l - P.r) / n, bw = Math.max(4, Math.min(16, slot * 0.62));
+  const x = (i) => P.l + slot * i + slot / 2;
+  const y = (v) => P.t + (H - P.t - P.b) * (1 - v / max);
+  let g = '';
+  [0, 0.5, 1].forEach(f => { const v = max * f; g += `<line x1="${P.l}" x2="${W - P.r}" y1="${y(v)}" y2="${y(v)}" stroke="#e3e7ed"/><text x="${P.l - 4}" y="${y(v) + 4}" font-size="10" text-anchor="end" fill="#6b7684">${Math.round(v)}</text>`; });
+  labels.forEach((l, i) => { const last = i === n - 1; if (i % Math.ceil(n / 8) === 0 || last) g += `<text x="${last ? W - P.r : x(i)}" y="${H - 6}" font-size="10" text-anchor="${last ? 'end' : 'middle'}" fill="#6b7684">${chartLabel(l)}</text>`; });
+  let lastI = -1;
+  labels.forEach((l, i) => {
+    if (tot[i] === null) return; lastI = i;
+    let acc = 0;
+    series.forEach(s => {
+      const v = s.values[i] || 0; if (!v) return;
+      const y1 = y(acc + v), y0 = y(acc);
+      g += `<rect x="${(x(i) - bw / 2).toFixed(1)}" y="${y1.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0.5, y0 - y1).toFixed(1)}" fill="${s.color}" stroke="#fff" stroke-width="1.5"/>`;
+      acc += v;
+    });
+    g += `<rect x="${(x(i) - slot / 2).toFixed(1)}" y="${P.t}" width="${slot.toFixed(1)}" height="${H - P.t - P.b}" fill="transparent"><title>${ymLabel(l)}　合計 ${tot[i]}\n${series.map(s => s.name + ' ' + (s.values[i] || 0)).join('\n')}</title></rect>`;
+  });
+  if (lastI >= 0) g += `<text x="${x(lastI)}" y="${(y(tot[lastI]) - 4).toFixed(1)}" font-size="10" text-anchor="middle" fill="#1f2a37" font-weight="bold">${tot[lastI]}</text>`;
+  return chartLegend(series) + `<svg class="chart" viewBox="0 0 ${W} ${H}">${g}</svg>`;
 }
 function dlt(a, b, unit) { if (a === null || b === null || a === undefined || b === undefined) return ''; const d = Math.round((b - a) * 10) / 10; return `<span class="${d > 0 ? 'up' : d < 0 ? 'down' : ''}">${d > 0 ? '+' : ''}${d}${unit || ''}</span>`; }
+/** 奉仕年度の12カ月（'YYYY-MM'） */
+function syMonths(sy, startM) { startM = startM || 9; const out = []; for (let i = 0; i < 12; i++) { const m0 = startM - 1 + i; out.push((m0 >= 12 ? sy : sy - 1) + '-' + ('0' + (m0 % 12 + 1)).slice(-2)); } return out; }
+const ptags = (p) => [p.rp && '正規', p.sp && '特別', p.fm && '宣教者', p.elder && '長老', p.ms && '援助'].filter(Boolean).map(t => `<span class="tg2">${t}</span>`).join('');
 
-let visTab = 'v1', visDrawn = false;
+// S-21 のラベル（指示の保管の分け方と同じ順）
+const VLABELS = [
+  { key: 'pioneer', short: '① 開拓者', title: '活発①　正規開拓者・特別開拓者・野外の宣教者', color: '#2f5d9b', bg: '#e6edf7' },
+  { key: 'other', short: '② 他の伝道者', title: '活発②　他の全ての伝道者（グループ別）', color: '#1f7a3a', bg: '#e4f1e8' },
+  { key: 'inactive', short: '不活発', title: '不活発な伝道者', color: '#6b7684', bg: '#eceef2' },
+  { key: 'cat', short: '区分別合計', title: '区分別合計（会衆の伝道者記録）', color: '#8a5a00', bg: '#f5ecdc' },
+];
+let visTab = 'v1', visDrawn = false, VIS = null, visLabel = 'pioneer', visYear = null;
 async function renderVisit() {
   app.classList.add('wide');
   const g = ++viewGen;
-  await swr('visit', { action: 'visit' }, (d, st) => {
+  await swr('visit:v2', { action: 'visit' }, (d, st) => {
     if (g !== viewGen || st.failed) return;
     if (!st.stale && !st.changed && visDrawn) return;
     drawVisit(d); visDrawn = true;
@@ -738,18 +886,14 @@ function visShowTab(t) {
   ['v1', 'v2', 'v3', 'v4', 'v5'].forEach(k => { const el = $('#tab-' + k); if (el) el.style.display = k === t ? '' : 'none'; });
 }
 function drawVisit(d) {
+  VIS = d;
+  if (!visYear || [d.sy - 1, d.sy].indexOf(visYear) < 0) visYear = d.sy;
   const labels = d.trend.map(t => t.ym);
   const y0 = d.years[0], y1 = d.years[1];
   const tile = (n, l, delta) => `<div class="tile"><div class="n">${n ?? '—'}</div><div class="l">${l}</div>${delta ? '<div class="d">昨年度比 ' + delta + '</div>' : ''}</div>`;
   const att = d.attention;
   const attBlock = (title, arr, fmt) => arr && arr.length ? `<details open><summary>${title}（${arr.length}）</summary><div class="att">${arr.map(x => `<span>${esc(x.name)} <small>${esc(x.group || '')}${fmt ? ' ' + fmt(x) : ''}</small></span>`).join('')}</div></details>` : '';
-  const monthsHdr = (sy) => { const out = []; for (let i = 0; i < 12; i++) out.push(((8 + i) % 12) + 1); return out; };
-  const cellTxt = (c, cat) => c ? ((c.p ? '✓' : '') + (c.s ? ' ' + c.s : '') + (c.a ? ' 補' : '') + (c.h ? ' ' + c.h + 'h' : '')) : '';
-  const personRows = (filter) => d.persons.filter(filter).map(p => {
-    const yd = p.years[1] || p.years[0]; if (!yd) return '';
-    return `<tr><td class="l">${esc(p.name)}${p.rp ? ' <small>正規</small>' : ''}${p.sp ? ' <small>特別</small>' : ''}${p.fm ? ' <small>宣教</small>' : ''}${p.elder ? ' <small>長老</small>' : ''}${p.ms ? ' <small>援助</small>' : ''}<br><small class="muted">${esc(p.group || '')}</small></td>${yd.cells.map(c => '<td>' + cellTxt(c) + '</td>').join('')}<td><b>${yd.count}</b></td><td>${yd.studies || ''}</td><td>${yd.hours || ''}</td></tr>`;
-  }).join('');
-  const s21table = (filter) => `<div style="overflow-x:auto"><table class="v"><tr><th style="min-width:110px">氏名</th>${monthsHdr().map(m => '<th>' + m + '月</th>').join('')}<th>報告</th><th>研究</th><th>時間</th></tr>${personRows(filter)}</table></div>`;
+  const by = (k) => d.trend.map(t => t.studiesBy ? t.studiesBy[k] : null);
   app.innerHTML = `
   <h1>巡回訪問 ダッシュボード</h1>
   <div class="sub">${esc(d.congregation)}　${d.sy} 奉仕年度（${ymLabel(d.asOf)} 分まで）　<span class="muted">作成 ${esc(d.generated)}${d.expires ? '／閲覧期限 ' + esc(d.expires) : ''}</span></div>
@@ -759,16 +903,19 @@ function drawVisit(d) {
       ${tile(y1.active, '活発な伝道者（年度平均）', dlt(y0.active, y1.active))}
       ${tile(y1.weekend, '週末集会 平均出席', dlt(y0.weekend, y1.weekend))}
       ${tile(y1.weekday, '週日集会 平均出席', dlt(y0.weekday, y1.weekday))}
-      ${tile(y1.studies, '聖書研究（月平均）', dlt(y0.studies, y1.studies))}
+      ${tile(y1.studies, '聖書レッスン（月平均）', dlt(y0.studies, y1.studies))}
       ${tile(d.counts.rp, '正規開拓者', '')}
       ${tile(y1.aux, '補助開拓者（月平均）', dlt(y0.aux, y1.aux))}
       ${tile(d.counts.elders + ' / ' + d.counts.ms, '長老 / 援助奉仕者', '')}
       ${tile(d.counts.inactive, '不活発な伝道者', '')}
     </div>
     <div class="card" style="margin-top:12px"><h3>活発な伝道者と集会出席の推移</h3>${lineChart([{ name: '活発な伝道者', values: d.trend.map(t => t.active), color: '#2f5d9b' }, { name: '週末出席', values: d.trend.map(t => t.weekend), color: '#1f7a3a' }, { name: '週日出席', values: d.trend.map(t => t.weekday), color: '#b26a00' }], labels)}</div>
-    <div class="card"><h3>開拓者・補助開拓者・聖書研究</h3>${lineChart([{ name: '正規・特別・宣教者', values: d.trend.map(t => t.pioneers), color: '#2f5d9b' }, { name: '補助開拓者', values: d.trend.map(t => t.aux), color: '#b26a00' }, { name: '聖書研究', values: d.trend.map(t => t.studies), color: '#1f7a3a' }], labels, { zero: true })}</div>
+    <div class="card"><h3>開拓者の人数</h3>${lineChart([{ name: '正規・特別・宣教者', values: d.trend.map(t => t.pioneers), color: '#2f5d9b' }, { name: '補助開拓者', values: d.trend.map(t => t.aux), color: '#b26a00' }], labels, { zero: true, unit: '人' })}
+      <div class="muted">その月に報告した人数</div></div>
+    <div class="card"><h3>聖書レッスン（会衆全体）</h3>${stackChart([{ name: '正規・特別・宣教者', values: by('pioneer'), color: '#2f5d9b' }, { name: '補助開拓者', values: by('aux'), color: '#b26a00' }, { name: '伝道者', values: by('other'), color: '#8a6fd1' }], labels)}
+      <div class="muted">その月に司会された個別の聖書レッスンの数。棒の高さが会衆全体の合計、色の内訳は司会した人の区分です。</div></div>
     <div class="card"><h3>年度比較（${y0.sy} → ${y1.sy}、同じ月数で比較）</h3><table class="v"><tr><th></th><th>${y0.sy}</th><th>${y1.sy}</th><th>差</th></tr>
-      ${[['活発な伝道者', 'active'], ['報告の数', 'reports'], ['週末出席', 'weekend'], ['週日出席', 'weekday'], ['聖書研究', 'studies'], ['補助開拓者', 'aux'], ['正規・特別・宣教者', 'pioneers']].map(([l, k]) => `<tr><td class="l">${l}</td><td>${y0[k] ?? '—'}</td><td>${y1[k] ?? '—'}</td><td>${dlt(y0[k], y1[k])}</td></tr>`).join('')}</table></div>
+      ${[['活発な伝道者', 'active'], ['報告の数', 'reports'], ['週末出席', 'weekend'], ['週日出席', 'weekday'], ['聖書レッスン', 'studies'], ['補助開拓者', 'aux'], ['正規・特別・宣教者', 'pioneers']].map(([l, k]) => `<tr><td class="l">${l}</td><td>${y0[k] ?? '—'}</td><td>${y1[k] ?? '—'}</td><td>${dlt(y0[k], y1[k])}</td></tr>`).join('')}</table></div>
   </div>
   <div id="tab-v2" style="display:none">
     ${att ? `
@@ -777,32 +924,195 @@ function drawVisit(d) {
     ${attBlock('伝道を始めて間もない', att.newcomers, x => ymLabel(x.since) + '〜')}
     ${attBlock('補助開拓を続けている', att.auxStreak, x => x.months + 'カ月連続')}
     ${attBlock('バプテスマから1年以内', att.newlyBaptized, x => x.date)}
-    ${attBlock('聖書研究が増えた', att.studiesUp, x => x.from + '→' + x.to)}
-    ${attBlock('聖書研究が減った', att.studiesDown, x => x.from + '→' + x.to)}
+    ${attBlock('聖書レッスンが増えた', att.studiesUp, x => x.from + '→' + x.to)}
+    ${attBlock('聖書レッスンが減った', att.studiesDown, x => x.from + '→' + x.to)}
     ${attBlock('不活発な伝道者', att.inactive, x => x.sy ? x.sy + '年度〜' : '')}
-    <div class="ro">※ 報告の有無・研究数・時間・バプテスマ日のみから機械的に抽出した一覧です。評価ではありません。</div>` :
-    `<div class="card"><h3>活発 ${d.counts.active} 名 ／ 不活発 ${d.counts.inactive} 名</h3><div class="att">${d.persons.filter(p => !p.active).map(p => `<span>${esc(p.name)} <small>${esc(p.group || '')}</small></span>`).join('') || '不活発な伝道者はいません'}</div></div>`}
+    <div class="ro">※ 報告の有無・聖書レッスンの数・時間・バプテスマ日のみから機械的に抽出した一覧です。評価ではありません。</div>` :
+    `<div class="card"><h3>活発 ${d.counts.active} 名 ／ 不活発 ${d.counts.inactive} 名</h3><div class="att">${d.persons.filter(p => !p.active).map(p => `<span>${esc(p.name)} <small>${esc(p.group || '')}</small></span>`).join('') || '不活発な伝道者はいません'}</div>
+      <div class="muted" style="margin-top:8px">最後の報告は「S-21」タブの「不活発」ラベルで見られます。</div></div>`}
   </div>
   <div id="tab-v3" style="display:none">
-    <div class="card"><h3>グループ別（直近3カ月）</h3><table class="v"><tr><th>グループ</th><th>人数</th><th>開拓者</th><th>報告率</th><th></th><th>研究</th><th>時間</th></tr>
+    <div class="card"><h3>グループ別（直近3カ月）</h3><table class="v"><tr><th>グループ</th><th>人数</th><th>開拓者</th><th>報告率</th><th></th><th>レッスン</th><th>時間</th></tr>
       ${d.groups.map(g => `<tr><td class="l">${esc(g.group)}</td><td>${g.members}</td><td>${g.pioneers}</td><td>${g.rate}%</td><td style="min-width:80px"><div class="bar"><i style="width:${g.rate}%"></i></div></td><td>${g.studies}</td><td>${g.hours}</td></tr>`).join('')}</table>
-      <div class="muted">報告率 = 直近3カ月の（報告あり）÷（活発な成員×3）</div></div>
-    <div class="card"><h3>区分別合計（${d.sy} 年度）</h3><div style="overflow-x:auto"><table class="v"><tr><th>月</th><th colspan="3">正規・特別・宣教者</th><th colspan="3">補助開拓者</th><th colspan="2">その他</th></tr><tr><th></th><th>報告</th><th>研究</th><th>時間</th><th>報告</th><th>研究</th><th>時間</th><th>報告</th><th>研究</th></tr>
-      ${d.cat.map(c => `<tr><td>${ymLabel(c.ym)}</td><td>${c.pioneer.count}</td><td>${c.pioneer.studies}</td><td>${c.pioneer.hours}</td><td>${c.aux.count}</td><td>${c.aux.studies}</td><td>${c.aux.hours}</td><td>${c.other.count}</td><td>${c.other.studies}</td></tr>`).join('')}</table></div></div>
+      <div class="muted">報告率 = 直近3カ月の（報告あり）÷（活発な成員×3）。区分別合計は「S-21」タブにあります。</div></div>
   </div>
   <div id="tab-v4" style="display:none">
-    <div class="card"><h3>正規開拓者・特別開拓者・野外の宣教者（${d.sy} 年度）</h3>${s21table(p => p.active && p.cat === 'pioneer')}</div>
-    <div class="card"><h3>他の全ての伝道者（グループ別）</h3>${s21table(p => p.active && p.cat === 'other')}</div>
-    <div class="card"><h3>不活発な伝道者</h3>${s21table(p => !p.active)}</div>
-    <div class="ro">セル: ✓=宣教を行った／数字=聖書研究／補=補助開拓／h=時間</div>
+    <div id="pdfCard">${pdfCardHtml(d)}</div>
+    <div class="folder" id="folder"></div>
+    <div class="ro lgd2">✓＝宣教を行った　<span class="cl"><i class="ls">2</i></span>＝聖書レッスン　<span class="cl"><i class="ax">補</i></span>＝補助開拓　<span class="cl"><i class="hr">50h</i></span>＝時間　<span style="color:#b5bcc8">－</span>＝報告あり（伝道なし）<br>名前を押すと、その人の2年度分の記録（備考を含む）が開きます。</div>
   </div>
   <div id="tab-v5" style="display:none">
+    <div class="card"><div class="fhead"><h3 style="margin:0">S-88 会衆の集会出席者数記録</h3>${pdfBtn('s88')}</div></div>
     ${d.s88.map(y => `<div class="card"><h3>${y.sy} 奉仕年度</h3><table class="v"><tr><th>月</th><th>週日 回数</th><th>合計</th><th>平均</th><th>週末 回数</th><th>合計</th><th>平均</th></tr>
       ${y.months.map(m => `<tr><td>${ymLabel(m.ym)}</td><td>${m.weekday ? m.weekday.count : ''}</td><td>${m.weekday ? m.weekday.total : ''}</td><td>${m.weekday ? m.weekday.avg : ''}</td><td>${m.weekend ? m.weekend.count : ''}</td><td>${m.weekend ? m.weekend.total : ''}</td><td>${m.weekend ? m.weekend.avg : ''}</td></tr>`).join('')}</table></div>`).join('')}
   </div>
-  <div class="ro">閲覧専用ページです。正式な記録は S-21／S-88 のPDFをご参照ください。</div>`;
+  <div class="ro">閲覧専用ページです。正式な記録（PDF）は「S-21」タブからダウンロードできます。</div>`;
   document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => visShowTab(b.dataset.tab));
   visShowTab(visTab);
+  drawFolder();
+  bindPdfButtons(app);
+  if ($('#pdfAll')) $('#pdfAll').onclick = (e) => downloadAllPdfs(e.currentTarget);
+}
+
+/** S-21 のラベルを開いた中身 */
+function drawFolder() {
+  const d = VIS, el = $('#folder'); if (!el) return;
+  const L = VLABELS.find(l => l.key === visLabel) || VLABELS[0];
+  const list = (k) => d.persons.map((p, i) => Object.assign({ _i: i }, p)).filter(p => k === 'inactive' ? !p.active : (p.active && p.cat === k));
+  const counts = { pioneer: list('pioneer').length + '名', other: list('other').length + '名', inactive: list('inactive').length + '名', cat: '3区分' };
+  let body = '';
+  if (L.key === 'pioneer') body = s21Grid(list('pioneer'), false);
+  else if (L.key === 'other') body = s21Grid(list('other'), true);
+  else if (L.key === 'inactive') body = inactiveList(list('inactive'));
+  else body = catTable();
+  el.innerHTML = `
+    <div class="ftabs" role="tablist">${VLABELS.map(l => `<button class="ftab ${l.key === L.key ? 'on' : ''}" data-l="${l.key}" role="tab" aria-selected="${l.key === L.key}" style="--c:${l.color};--bg2:${l.bg}">${l.short}<small>${counts[l.key]}</small></button>`).join('')}</div>
+    <div class="fpanel" style="--c:${L.color}">
+      <div class="fhead"><h3><i class="dot"></i>${L.title}</h3>${pdfBtn(L.key)}</div>
+      ${L.key !== 'inactive' ? `<div class="seg">${[d.sy - 1, d.sy].map(y => `<button data-y="${y}" class="${y === visYear ? 'on' : ''}">${y}年度${y === d.sy ? `<small>（${Number(d.asOf.slice(5))}月分まで）</small>` : ''}</button>`).join('')}</div>` : ''}
+      ${body}
+    </div>`;
+  el.querySelectorAll('.ftab').forEach(b => b.onclick = () => { visLabel = b.dataset.l; drawFolder(); });
+  el.querySelectorAll('.seg button').forEach(b => b.onclick = () => { visYear = Number(b.dataset.y); drawFolder(); });
+  el.querySelectorAll('[data-pi]').forEach(r => r.onclick = () => openPerson(Number(r.dataset.pi)));
+  el.querySelectorAll('tr.gh').forEach(r => r.onclick = () => r.parentElement.classList.toggle('shut'));
+  bindPdfButtons(el);
+}
+/** 月ごとのS-21（名前の列は固定、月は横にスクロール）。grouped なら野外奉仕グループごとに見出し */
+function s21Grid(list, grouped) {
+  const d = VIS, yi = visYear === d.sy ? 1 : 0, ms = syMonths(visYear, d.startM);
+  if (!list.length) return '<div class="muted">該当者はいません</div>';
+  const cell = (c, ym) => {
+    if (ym > d.asOf) return '<td class="fut"></td>';
+    if (!c) return '<td></td>';
+    if (!c.p) return '<td class="np">－</td>';
+    return `<td class="cl"><div><b class="ck">✓</b>${c.a ? '<i class="ax">補</i>' : ''}</div>${c.s || c.h ? `<div>${c.s ? `<i class="ls">${c.s}</i>` : ''}${c.h ? `<i class="hr">${c.h}h</i>` : ''}</div>` : ''}</td>`;
+  };
+  const row = (p) => {
+    const yd = p.years[yi];
+    return `<tr class="pr" data-pi="${p._i}"><td class="stk"><div class="pn">${esc(p.name)}${ptags(p)}</div>${grouped ? '' : `<div class="pgr">${esc(p.group || '')}</div>`}<div class="pt">${yd ? `<span>報告 ${yd.count}</span> <span>レッスン ${yd.studies}</span>${yd.hours ? ` <span>${yd.hours}h</span>` : ''}` : '記録なし'}</div></td>${ms.map((ym, i) => cell(yd && yd.cells[i], ym)).join('')}</tr>`;
+  };
+  const head = `<thead><tr><th class="stk">氏名<small>（年度の合計）</small></th>${ms.map(ym => `<th>${Number(ym.slice(5))}月</th>`).join('')}</tr></thead>`;
+  let rows = '';
+  if (grouped) {
+    const gs = []; list.forEach(p => { const g = p.group || '（グループなし）'; let x = gs.find(z => z.g === g); if (!x) gs.push(x = { g, ps: [] }); x.ps.push(p); });
+    rows = gs.map(x => `<tbody><tr class="gh"><td colspan="13"><span class="ghi"><span class="ar">▾</span> <b>${esc(x.g)}</b> <small>${x.ps.length}名</small></span></td></tr>${x.ps.map(row).join('')}</tbody>`).join('');
+  } else rows = '<tbody>' + list.map(row).join('') + '</tbody>';
+  return `<div class="gridwrap"><table class="s21t">${head}${rows}</table></div>`;
+}
+function lastTxt(r) {
+  if (!r) return '';
+  return [r.p ? '伝道した' : '伝道なし', r.s ? 'レッスン ' + r.s : '', r.a ? '補助開拓' : '', r.h ? r.h + '時間' : ''].filter(Boolean).join('・') + (r.m ? '　備考: ' + r.m : '');
+}
+function inactiveList(list) {
+  if (!list.length) return '<div class="muted">不活発な伝道者はいません</div>';
+  return `<div class="muted" style="margin-bottom:4px">6カ月以上「伝道した」報告がない人。S-21は不活発になった奉仕年度の分だけ保管します。</div>` +
+    list.map(p => `<div class="irow" data-pi="${p._i}">
+      <div class="pn">${esc(p.name)}${ptags(p)} <small class="muted">${esc(p.group || '')}</small></div>
+      <div class="il"><span class="k">最後の報告</span>${p.lastYm ? ymLabel(p.lastYm) + (p.last ? '（' + esc(lastTxt(p.last)) + '）' : '<small class="muted">（内容は保管期間外）</small>') : '記録なし'}</div>
+      <div class="il"><span class="k">最後に伝道</span>${p.lastPreachedYm ? ymLabel(p.lastPreachedYm) : '記録なし'}　<span class="k">不活発になった年度</span>${p.inactiveSy ? esc(p.inactiveSy) + '年度' : '—'}</div>
+    </div>`).join('');
+}
+function catTable() {
+  const d = VIS, yc = (d.cat || []).find(c => c.sy === visYear);
+  if (!yc || !yc.months.length) return '<div class="muted">この年度の集計はまだありません</div>';
+  const sum = (k, f) => yc.months.reduce((a, m) => a + (m[k][f] || 0), 0);
+  const z = (v) => v || '';
+  return `<div class="gridwrap"><table class="s21t cat"><thead><tr><th class="stk" rowspan="2">月</th><th colspan="3" class="c1">① 正規・特別・宣教者</th><th colspan="3" class="c2">補助開拓者</th><th colspan="2" class="c3">他の全ての伝道者</th></tr>
+    <tr><th>報告</th><th>レッスン</th><th>時間</th><th>報告</th><th>レッスン</th><th>時間</th><th>報告</th><th>レッスン</th></tr></thead><tbody>
+    ${yc.months.map(c => `<tr><td class="stk">${Number(c.ym.slice(5))}月</td><td>${z(c.pioneer.count)}</td><td>${z(c.pioneer.studies)}</td><td>${z(c.pioneer.hours)}</td><td>${z(c.aux.count)}</td><td>${z(c.aux.studies)}</td><td>${z(c.aux.hours)}</td><td>${z(c.other.count)}</td><td>${z(c.other.studies)}</td></tr>`).join('')}
+    <tr class="tot"><td class="stk">合計</td><td>${sum('pioneer', 'count')}</td><td>${sum('pioneer', 'studies')}</td><td>${sum('pioneer', 'hours')}</td><td>${sum('aux', 'count')}</td><td>${sum('aux', 'studies')}</td><td>${sum('aux', 'hours')}</td><td>${sum('other', 'count')}</td><td>${sum('other', 'studies')}</td></tr>
+    </tbody></table></div><div class="muted" style="margin-top:6px">「報告」は報告の数。特別開拓者・野外の宣教者を含みます（支部への報告では除外）。</div>`;
+}
+/** 1人分の記録（下から出るシート） */
+function openPerson(i) {
+  const d = VIS, p = d.persons[i]; if (!p) return;
+  const yrs = p.years.map((yd, k) => ({ yd, sy: d.sy - 1 + k })).filter(x => x.yd).reverse();
+  const yearTable = ({ yd, sy }) => `<h4>${sy} 奉仕年度</h4><table class="s21m"><colgroup><col style="width:38px"><col style="width:46px"><col style="width:52px"><col style="width:38px"><col style="width:42px"><col></colgroup><tr><th>月</th><th>宣教を<br>行った</th><th>聖書<br>レッスン</th><th>補助<br>開拓</th><th>時間</th><th>備考</th></tr>
+    ${syMonths(sy, d.startM).map((ym, k) => { const c = yd.cells[k]; return `<tr class="${ym > d.asOf ? 'fut' : ''}"><td>${Number(ym.slice(5))}月</td><td>${c ? (c.p ? '✓' : '－') : ''}</td><td>${c && c.s ? c.s : ''}</td><td>${c && c.a ? '✓' : ''}</td><td>${c && c.h ? c.h : ''}</td><td class="rm">${c && c.m ? esc(c.m) : ''}</td></tr>`; }).join('')}
+    <tr class="tot"><td>合計</td><td>${yd.count}</td><td>${yd.studies || ''}</td><td></td><td>${yd.hours || ''}</td><td></td></tr></table>`;
+  const bg = document.createElement('div'); bg.className = 'sheet-bg';
+  bg.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(p.name)}">
+    <div class="sh-top"><div><b class="sh-n">${esc(p.name)}</b>${ptags(p)}<div class="muted">${[p.group || '', p.baptism ? 'バプテスマ ' + p.baptism : '', p.active ? (p.cat === 'pioneer' ? '活発①' : '活発②') : '不活発'].filter(Boolean).map(esc).join('　')}</div></div><button class="sh-x" aria-label="閉じる">×</button></div>
+    ${!p.active ? `<div class="msg warn" style="margin-top:0">最後の報告 ${p.lastYm ? ymLabel(p.lastYm) + (p.last ? '（' + esc(lastTxt(p.last)) + '）' : '') : 'なし'}<br>最後に伝道 ${p.lastPreachedYm ? ymLabel(p.lastPreachedYm) : 'なし'}　／　不活発になった年度 ${p.inactiveSy ? esc(p.inactiveSy) : '—'}</div>` : ''}
+    ${yrs.length ? yrs.map(yearTable).join('') : '<div class="muted">保管期間内の記録はありません</div>'}
+  </div>`;
+  document.body.appendChild(bg); document.body.style.overflow = 'hidden';
+  const close = () => { bg.remove(); document.body.style.overflow = ''; document.removeEventListener('keydown', esc1); };
+  const esc1 = (e) => { if (e.key === 'Escape') close(); };
+  document.addEventListener('keydown', esc1);
+  bg.onclick = (e) => { if (e.target === bg) close(); };
+  $('.sh-x', bg).onclick = close;
+}
+
+// ---- 正式なPDF（書記が作成したもの）のダウンロード
+function pdfFile(key) { const s = VIS && VIS.pdfs; return s && s.files ? s.files.find(f => f.key === key) : null; }
+function pdfBtn(key) {
+  const f = pdfFile(key);
+  if (!f || f.missing) return '<span class="pdfx muted">PDF未作成</span>';
+  if (f.empty) return '<span class="pdfx muted">PDF：該当なし</span>';
+  return `<button class="pdfb" data-pdf="${key}">PDF<small>${f.pages}ページ</small></button>`;
+}
+function pdfCardHtml(d) {
+  const s = d.pdfs;
+  if (!s || !s.ready) return `<div class="card pdfc"><h3>正式な記録（PDF）</h3><div class="muted">まだ作成されていません。書記が作成すると、ここからダウンロードできます。</div></div>`;
+  const files = s.files.filter(f => !f.missing && !f.empty), pages = files.reduce((a, f) => a + (f.pages || 0), 0);
+  const changed = [s.newer ? '報告が ' + s.newer + ' 件追加・変更' : '', s.aggregatedAfter ? '月次集計（活発／不活発の判定）' : ''].filter(Boolean).join('、');
+  return `<div class="card pdfc"><h3>正式な記録（PDF）</h3>
+    <div class="muted">S-21（公式様式・1人1ページ）と S-88　${s.years.map(esc).join('・')} 奉仕年度　作成 ${esc(s.generated)}</div>
+    ${changed ? `<div class="msg warn">PDFの作成後に、${changed}がありました。この画面の表は最新ですが、PDFは作成時点の内容です。</div>` : ''}
+    ${s.missing ? '<div class="msg warn">一部のPDFがまだ作成されていません。</div>' : ''}
+    <button class="btn" id="pdfAll">まとめて1つのPDFで保存<small>（全 ${pages} ページ・綴じる順）</small></button>
+    <details class="pdfl"><summary>ファイルごとに保存</summary>${s.files.map(f => `<div class="pf"><span>${esc(f.label)}</span>${pdfBtn(f.key)}</div>`).join('')}</details>
+  </div>`;
+}
+const PDFQ = {};
+function b64bytes(b64) { const bin = atob(b64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; }
+function fetchPdf(key) {
+  const f = pdfFile(key), k = key + '|' + (f ? f.generated : '');
+  if (!PDFQ[k]) PDFQ[k] = call({ action: 'visitPdf', key }, { quiet: true }).then(r => ({ name: r.name, bytes: b64bytes(r.data) })).catch(e => { delete PDFQ[k]; throw e; });
+  return PDFQ[k];
+}
+/** 保存する。自動で始まらない端末のために、押せる保存リンクもボタンの下に出す */
+function saveBytes(bytes, name, near) {
+  const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+  const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  let link = near.parentElement.querySelector('a.pdfget');
+  if (!link) { link = document.createElement('a'); link.className = 'pdfget'; near.insertAdjacentElement('afterend', link); }
+  link.href = url; link.download = name; link.textContent = '⤓ ' + name + '（保存が始まらないときはここを押す）';
+}
+function bindPdfButtons(root) {
+  root.querySelectorAll('button.pdfb').forEach(b => b.onclick = async (e) => {
+    e.stopPropagation();
+    const orig = b.innerHTML; b.disabled = true; b.innerHTML = '準備中…';
+    try { const r = await fetchPdf(b.dataset.pdf); saveBytes(r.bytes, r.name, b); }
+    catch (er) { toast(er.message, 'err'); }
+    finally { b.disabled = false; b.innerHTML = orig; }
+  });
+}
+async function loadPdfLib() {
+  if (window.PDFLib) return window.PDFLib;
+  for (const src of ['https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js', 'https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js']) {
+    try { await new Promise((ok, ng) => { const sc = document.createElement('script'); sc.src = src; sc.onload = ok; sc.onerror = ng; document.head.appendChild(sc); }); if (window.PDFLib) return window.PDFLib; } catch (e) {}
+  }
+  throw new Error('PDFをまとめる部品を読み込めませんでした。「ファイルごとに保存」をお使いください。');
+}
+/** 区分ごとのPDFを順に取り、この端末で1つにまとめて保存（綴じる順: ①→②→不活発→区分別合計→S-88） */
+async function downloadAllPdfs(btn) {
+  const s = VIS.pdfs, files = s.files.filter(f => !f.missing && !f.empty);
+  const orig = btn.innerHTML; btn.disabled = true;
+  try {
+    const lib = loadPdfLib();
+    const parts = [];
+    for (let i = 0; i < files.length; i++) { btn.innerHTML = `準備中… ${i + 1} / ${files.length}`; parts.push(await fetchPdf(files[i].key)); }
+    btn.innerHTML = '1つにまとめています…';
+    const { PDFDocument } = await lib;
+    const out = await PDFDocument.create();
+    for (const p of parts) { const src = await PDFDocument.load(p.bytes); (await out.copyPages(src, src.getPageIndices())).forEach(pg => out.addPage(pg)); }
+    out.setTitle(VIS.congregation + ' S-21・S-88 ' + s.years.join('・') + '奉仕年度');
+    saveBytes(await out.save(), 'S-21・S-88_' + VIS.congregation + '_' + s.years.join('-') + '.pdf', btn);
+  } catch (e) { toast(e.message, 'err'); }
+  finally { btn.disabled = false; btn.innerHTML = orig; }
 }
 
 // ------------------------------------------------------------
