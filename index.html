@@ -19,6 +19,7 @@
   .row .lab { flex:1; font-size:15px; }
   .row input[type=number] { width:64px; height:40px; font-size:18px; text-align:center; border:1px solid #333; border-radius:4px; }
   .row.disabled { color:#aaa; }
+  .row.disabled .chk, .row.disabled .tg { opacity:.5; pointer-events:none; }
   .field { display:flex; align-items:baseline; gap:8px; margin:4px 0 8px; }
   .field b { white-space:nowrap; }
   .field .v { flex:1; border-bottom:1px dotted #333; padding:2px 4px; font-size:17px; }
@@ -70,6 +71,8 @@
   .memh span { text-align:center; } .memh span:first-child { text-align:left; }
   .mem .nm { font-size:15px; overflow:hidden; line-height:1.3; }
   .mem.own { background:#f3f5f8; } .mem.own .l1 { color:#9aa5b5; } .mem.own .l1 .tg { opacity:.5; pointer-events:none; } .mem.own .l1 input, .mem.own input[data-f=remarks] { color:#9aa5b5; background:#f3f5f8; }
+  /* 締切後の行（入力済み）: 変更できない。書記として開いたときは使わない */
+  .mem.lock { background:#f3f5f8; } .mem.lock .l1 { color:#9aa5b5; } .mem.lock .tg { opacity:.5; pointer-events:none; } .mem.lock input { color:#9aa5b5; background:#f3f5f8; }
   .mem.inactive .nm { color:#b5bcc8; }
   .mem input { width:100%; height:38px; font-size:16px; text-align:center; border:1px solid #9aa5b5; border-radius:5px; }
   .mem input:disabled { background:#f3f5f8; }
@@ -318,19 +321,28 @@ async function renderPersonal(ym) {
   const g = ++viewGen; pv = null;
   await swr('me:' + (ym || 'cur'), { action: 'me', ym }, (d, st) => {
     if (g !== viewGen) return;
-    // 入力を始めていたら、入力欄はそのままにして「提出済み」表示と履歴だけ最新にする
-    if (!st.stale && pv && pv.dirty && pv.d.ym === d.ym) { pv.d = d; personalMeta(d); sendReady(true); return; }
+    // 入力を始めていたら、入力欄はそのままにして「提出済み」表示と履歴だけ最新にする（締切後で変更できない月なら描き直す）
+    if (!st.stale && pv && pv.dirty && pv.d.ym === d.ym && !(d.report && d.report.locked)) { pv.d = d; personalMeta(d); sendReady(true); return; }
     if (st.failed && pv && pv.d.ym === d.ym) { sendReady(true); return; }
     drawPersonal(d, st.stale);
   }, { alsoKey: d => 'me:' + d.ym });
 }
-function personalSubnote(r) { return r.submitted ? `<div class="muted" style="margin-top:8px">提出済み: ${esc(r.submitted)}（${r.source === 'overseer' ? '監督入力' : r.source === 'import' ? '取込' : r.source === 'map' ? '区域マップ' : '本人'}）。送信すると上書きされます。</div>` : ''; }
+// 締切日の表示（ym の翌月の締切日）。例: 2026-09 → 10月5日
+function deadlineLabel(ym, day) { return Number(ymAdd(ym, 1).slice(5)) + '月' + (day || 5) + '日'; }
+function personalSubnote(r, d) {
+  if (!r.submitted) return d && d.locked ? `<div class="msg warn">締切（${deadlineLabel(d.ym, d.deadline)}）を過ぎています。今から送ると、翌月の会衆の報告に加えられます。</div>` : '';
+  const who = r.source === 'overseer' ? '監督入力' : r.source === 'import' ? '取込' : r.source === 'map' ? '区域マップ' : '本人';
+  if (r.locked) return `<div class="msg warn">提出済み: ${esc(r.submitted)}（${who}）<br>締切を過ぎたため、この月の報告は変更できません。直す必要があるときは、監督か書記に伝えてください。</div>`;
+  return `<div class="muted" style="margin-top:8px">提出済み: ${esc(r.submitted)}（${who}）。送信すると上書きされます。</div>`;
+}
 function personalHist(d) { return `<table class="hist"><tr><th>月</th><th>伝道</th><th>レッスン</th><th>補助</th><th>時間</th></tr>
   ${(d.recent || []).slice(1, 7).map(x => `<tr><td>${ymLabel(x.ym)}</td><td>${x.empty ? '—' : x.preached ? '✓' : ''}</td><td>${x.empty ? '' : x.studies || ''}</td><td>${x.empty ? '' : x.aux ? '✓' : ''}</td><td>${x.empty ? '' : x.hours || ''}</td></tr>`).join('')}</table>`; }
-function personalMeta(d) { const s = $('#subnote'), h = $('#hist'); if (s) s.innerHTML = personalSubnote(d.report || {}); if (h) h.innerHTML = personalHist(d); }
+function personalMeta(d) { const s = $('#subnote'), h = $('#hist'); if (s) s.innerHTML = personalSubnote(d.report || {}, d); if (h) h.innerHTML = personalHist(d); }
 function sendReady(on) { const b = $('#send'); if (!b) return; b.disabled = !on; b.textContent = on ? '送信' : '最新の状態を確認中…'; }
 function drawPersonal(d, stale) {
   const p = d.person, r = d.report || {};
+  const ro = !!r.locked;   // 締切後で提出済み: 見るだけ（変更できない）
+  const dis = ro ? 'disabled' : '';
   pv = { d, dirty: false };
   const opts = []; for (let i = 0; i < 4; i++) { const y = ymAdd(d.ym, 1 - i); opts.push(y); }
   if (!opts.includes(d.ym)) opts.unshift(d.ym);
@@ -340,20 +352,21 @@ function drawPersonal(d, stale) {
   <div class="card">
     <div class="field"><b>氏名:</b><div class="v">${esc(p.name)}</div></div>
     <div class="field"><b>月:</b><div class="v" style="border:none;padding:0"><select id="ym">${opts.map(y => `<option value="${y}" ${y === d.ym ? 'selected' : ''}>${ymLabel(y)}</option>`).join('')}</select></div></div>
-    <div class="row"><div class="lab">1カ月間に何らかの形で伝道したならチェックを入れてください</div><div class="chk ${r.preached ? 'on' : ''}" id="preached">${r.preached ? '✓' : ''}</div></div>
-    <div class="row"><div class="lab">司会した<b>個別の</b>聖書レッスンの数</div><input type="number" id="studies" inputmode="numeric" min="0" value="${r.studies ?? ''}"></div>
-    <div class="row ${p.pioneer ? '' : ''}"><div class="lab">補助開拓者として奉仕した</div><div class="tg ${r.aux ? 'on' : ''}" id="aux"></div></div>
-    <div class="row ${p.pioneer || r.aux ? '' : 'disabled'}" id="hoursRow"><div class="lab">時間<br><span class="muted">（補助開拓者, 正規開拓者, 特別開拓者, 野外の宣教者は記入してください）</span></div><input type="number" id="hours" inputmode="numeric" min="0" value="${r.hours || ''}" ${p.pioneer || r.aux ? '' : 'disabled'}></div>
-    ${p.pioneer ? `<div class="row"><div class="lab">承認された活動の時間<br><span class="muted">（LDC等。任意。報告には含まれず備考に記録）</span></div><input type="number" id="actHours" inputmode="numeric" min="0" value="${r.actHours || ''}"></div>` : ''}
-    <div class="row" style="display:block"><div class="lab">備考:</div><textarea id="remarks">${esc(r.remarks || '')}</textarea></div>
-    <div id="subnote">${personalSubnote(r)}</div>
-    <button class="btn" id="send" ${stale ? 'disabled' : ''}>${stale ? '最新の状態を確認中…' : '送信'}</button>
+    <div class="row ${ro ? 'disabled' : ''}"><div class="lab">1カ月間に何らかの形で伝道したならチェックを入れてください</div><div class="chk ${r.preached ? 'on' : ''}" id="preached">${r.preached ? '✓' : ''}</div></div>
+    <div class="row ${ro ? 'disabled' : ''}"><div class="lab">司会した<b>個別の</b>聖書レッスンの数</div><input type="number" id="studies" inputmode="numeric" min="0" value="${r.studies ?? ''}" ${dis}></div>
+    <div class="row ${ro ? 'disabled' : ''}"><div class="lab">補助開拓者として奉仕した</div><div class="tg ${r.aux ? 'on' : ''}" id="aux"></div></div>
+    <div class="row ${(p.pioneer || r.aux) && !ro ? '' : 'disabled'}" id="hoursRow"><div class="lab">時間<br><span class="muted">（補助開拓者, 正規開拓者, 特別開拓者, 野外の宣教者は記入してください）</span></div><input type="number" id="hours" inputmode="numeric" min="0" value="${r.hours || ''}" ${(p.pioneer || r.aux) && !ro ? '' : 'disabled'}></div>
+    ${p.pioneer ? `<div class="row ${ro ? 'disabled' : ''}"><div class="lab">承認された活動の時間<br><span class="muted">（LDC等。任意。報告には含まれず備考に記録）</span></div><input type="number" id="actHours" inputmode="numeric" min="0" value="${r.actHours || ''}" ${dis}></div>` : ''}
+    <div class="row ${ro ? 'disabled' : ''}" style="display:block"><div class="lab">備考:</div><textarea id="remarks" ${dis}>${esc(r.remarks || '')}</textarea></div>
+    <div id="subnote">${personalSubnote(r, d)}</div>
+    ${ro ? '' : `<button class="btn" id="send" ${stale ? 'disabled' : ''}>${stale ? '最新の状態を確認中…' : '送信'}</button>`}
     <div class="muted" style="text-align:center;margin-top:8px">S-4-J 11/23 と同じ項目です</div>
   </div>
   <div class="card"><h3>最近の報告</h3><div id="hist">${personalHist(d)}</div></div>`;
   const dirty = () => { if (pv) pv.dirty = true; };
   app.querySelectorAll('input, textarea').forEach(el => el.addEventListener('input', dirty));
   $('#ym').onchange = (e) => renderPersonal(e.target.value).catch(showError);
+  if (ro) return;
   $('#preached').onclick = (e) => { dirty(); e.target.classList.toggle('on'); e.target.textContent = e.target.classList.contains('on') ? '✓' : ''; };
   $('#aux').onclick = (e) => { dirty(); e.target.classList.toggle('on'); const on = e.target.classList.contains('on') || p.pioneer; $('#hours').disabled = !on; $('#hoursRow').classList.toggle('disabled', !on); };
   $('#send').onclick = async () => {
@@ -371,7 +384,10 @@ function drawPersonal(d, stale) {
       const cur = cacheGet('me:cur'); if (cur && cur.ym === d.ym) cacheSet('me:cur', d);
       drawPersonal(d, false);
       toast(ymLabel(payload.ym) + ' の報告を送信しました' + (res.late ? '（締切後のため翌月の会衆報告に加算されます）' : ''), res.late ? 'warn' : 'ok');
-    } catch (e) { btn.disabled = false; toast(e.message, 'err'); }
+    } catch (e) {
+      btn.disabled = false; toast(e.message, 'err');
+      if (e.code === 'locked') { cacheDel('me:' + payload.ym); renderPersonal(payload.ym).catch(showError); }   // 締切後で変更できない月: 見るだけの表示にする
+    }
   };
 }
 
@@ -382,9 +398,14 @@ const OV_BY_KEY = 's21_ov_by';
 const stripTag = (s) => String(s || '').replace(/\s*承認活動\s*\d+h（うち加算\s*\d+h）/g, '').replace(/\s*［加算\s*\d+h］/g, '').trim();
 const isOwn = (r) => !!r && (r.source === 's4' || r.source === 'map');
 let OV = null;
+// 書記トークンで開いたとき（書記の修正）は、締切後の行・本人提出の行も直せる
+const ovSec = () => !!(OV && OV.d && OV.d.secretary);
+const ownRow = (m) => isOwn(m.report) && !ovSec();                     // 本人提出（監督は数字・備考を変えない）
+const lockRow = (m) => !!(m.report && m.report.locked) && !ovSec();   // 締切後の入力済み（監督は何も変えられない）
 
 async function renderOverseer(ym) {
   app.classList.add('ov');
+  if (ym && !/^\d{4}-\d{2}$/.test(ym)) ym = undefined;
   const gen = ++viewGen;
   await swr('ov:' + (ym || 'cur'), { action: 'overseer', ym }, (d, st) => {
     if (gen !== viewGen) return;
@@ -404,21 +425,27 @@ function drawOverseer(d, stale) {
   const keep = OV && OV.ym === d.ym && $('#groups') ? { open: [...document.querySelectorAll('details.grp[open]')].map(x => x.dataset.group), only: !!($('#onlyUnsub') && $('#onlyUnsub').checked) } : null;
   app.classList.toggle('is-stale', !!stale);
   let saved = ''; try { saved = localStorage.getItem(OV_BY_KEY) || ''; } catch (e) {}
-  const byId = d.me ? d.me.id : (d.overseers.some(o => o.id === saved) ? saved : '');
-  OV = { d, ym: d.ym, byId };
+  const byId = d.secretary ? '' : d.me ? d.me.id : (d.overseers.some(o => o.id === saved) ? saved : '');
+  OV = { d, ym: d.ym, byId, okLocked: false };
   const myGroup = () => { if (d.me) return d.me.group; const o = d.overseers.find(x => x.id === OV.byId); return o ? o.group : ''; };
   const opts = [ymAdd(d.ym, 1), d.ym, ymAdd(d.ym, -1), ymAdd(d.ym, -2)];
   const byGroups = [...new Set(d.overseers.map(o => o.group))];
+  const dl = deadlineLabel(d.ym, d.deadline);
+  // 締切後の月の注意（監督: 入力済みは変更できない／書記: 直せる）
+  const lockNote = !d.locked ? '' : d.secretary
+    ? `<div class="msg warn">${ymLabel(d.ym)}分は締切（${dl}）を過ぎています。<b>書記として開いているので、入力済みの報告（本人提出を含む）も直せます。</b><br>直しても、支部へ送った数字は変わりません（S-21の個人の記録に反映されます）。すでに数えた報告は、数えた月のまま残ります。</div>`
+    : `<div class="msg warn">🔒 ${ymLabel(d.ym)}分は締切（${dl}）を過ぎました。<b>入力済みの報告は変更できません。</b>直す必要があるときは書記に伝えてください。<br>まだ報告のない人は入力できます（翌月の会衆の報告に加えられます）。</div>`;
   app.innerHTML = `
   <h1>野外奉仕報告　監督用</h1>
-  <div class="sub">${esc(d.congregation)}　全グループ</div>
+  <div class="sub">${esc(d.congregation)}　全グループ${d.secretary ? '（書記の修正）' : ''}</div>
   <div class="card">
     <div class="ovtop">
       <div><label>月</label><select id="ym">${opts.map(y => `<option value="${y}" ${y === d.ym ? 'selected' : ''}>${ymLabel(y)}</option>`).join('')}</select></div>
-      <div><label>入力する人</label>${d.me ? `<div class="fixed">${esc(d.me.name)}</div>` :
+      <div><label>入力する人</label>${d.secretary ? '<div class="fixed">書記</div>' : d.me ? `<div class="fixed">${esc(d.me.name)}</div>` :
         `<select id="by"><option value="">選んでください</option>${byGroups.map(g => `<optgroup label="${esc(g || '（グループなし）')}">${d.overseers.filter(o => o.group === g).map(o => `<option value="${esc(o.id)}" ${o.id === byId ? 'selected' : ''}>${esc(o.name)}</option>`).join('')}</optgroup>`).join('')}</select>`}</div>
     </div>
-    <div class="msg warn" id="needBy" style="display:${OV.byId ? 'none' : 'block'}">はじめに「入力する人」で自分の名前を選んでください（この端末に記憶されます）。</div>
+    <div class="msg warn" id="needBy" style="display:${OV.byId || d.secretary ? 'none' : 'block'}">はじめに「入力する人」で自分の名前を選んでください（この端末に記憶されます）。</div>
+    ${lockNote}
     <h3 style="margin-top:12px">グループの状況 <span class="muted" id="totalCount"></span></h3>
     <table class="gsum"><tr><th style="text-align:left">グループ</th><th>提出</th><th>未提出</th><th>月締め</th></tr>
       ${d.groups.map((g, gi) => `<tr class="g" data-gi="${gi}" id="gs-${gi}"><td class="l">${esc(g.group)}<div class="ovs">${g.overseers.map(esc).join('・')}</div></td><td class="gsub"></td><td class="gun"></td><td class="gcl"></td></tr>`).join('')}
@@ -440,6 +467,8 @@ function drawOverseer(d, stale) {
   <div class="card muted">
     ・1行入力するごとに自動保存されます（保存した行は一瞬緑色になります）。<br>
     ・グレーの行は本人がWEBで提出したものです。数字と備考は変えられませんが、開拓者の<b>加算時間</b>は入力できます。<br>
+    ・締切（翌月${d.deadline || 5}日）を過ぎた月の入力済みの報告（🔒）は、加算時間も含めて変更できません。直す必要があるときは書記に伝えてください。<br>
+    ・入力した行を全部空にすると、未提出に戻ります。伝道しなかった月の報告を残すときは、備考に「伝道なし」などと書いてください。<br>
     ・<b>加算時間</b>（開拓者のみ）：承認された活動のうち加算できる時間。野外奉仕と合わせて月${d.cap}時間までです。報告の時間には含まれず、S-21の備考に記録されます。開拓者学校などの学校の時間は上限とは別なので、備考に「開拓者学校30h」のように書いてください。<br>
     ・不活発の人は各グループの最後に薄く表示されます。報告があれば入力できます。
   </div>`;
@@ -471,7 +500,7 @@ function drawOverseer(d, stale) {
   d.groups.forEach((g, gi) => g.members.forEach(m => bindMember(m, gi)));
 }
 function needBy() {
-  if (OV.byId) return false;
+  if (OV.byId || ovSec()) return false;
   toast('はじめに「入力する人」で自分の名前を選んでください', 'err');
   const sel = $('#by'); if (sel) { sel.scrollIntoView({ behavior: 'smooth', block: 'center' }); sel.focus(); }
   return true;
@@ -494,16 +523,18 @@ function updateGroupCounts(gi) {
 }
 function rowStatus(m) {
   const r = m.report;
-  if (isOwn(r)) return '<span class="pill">本人提出</span>';
-  if (r && r.source === 'overseer') return '<span class="pill ok">入力済</span>';
-  if (r) return '<span class="pill">' + (r.source === 'import' ? '取込' : '入力済') + '</span>';
+  const tail = !r ? '' : (r.late ? '<span class="pill warn">締切後に提出</span>' : '') + (r.locked ? '<span class="pill" title="締切を過ぎたため変更できません（書記のみ）">🔒</span>' : '');
+  if (isOwn(r)) return '<span class="pill">本人提出</span>' + tail;
+  if (r && r.source === 'overseer') return '<span class="pill ok">入力済</span>' + tail;
+  if (r) return '<span class="pill">' + (r.source === 'import' ? '取込' : '入力済') + '</span>' + tail;
   return '';
 }
 function memberRow(m) {
   const r = m.report || {};
-  const own = isOwn(m.report);
-  const cls = [own ? 'own' : '', !m.active ? 'inactive' : '', m.report ? 'has' : ''].join(' ');
-  const warn = m.active && !m.report && m.monthsWithout >= 4 ? `<span class="pill warn">${6 - m.monthsWithout}カ月で不活発</span>` : '';
+  const lock = lockRow(m);
+  const own = ownRow(m) || lock;
+  const cls = [ownRow(m) ? 'own' : '', lock ? 'lock' : '', !m.active ? 'inactive' : '', m.report ? 'has' : ''].join(' ');
+  const warn = m.active && !m.report && m.monthsWithout >= 4 ? `<span class="pill warn soon">${6 - m.monthsWithout}カ月で不活発</span>` : '';
   const kind = m.rp ? '正規' : m.sp ? '特別' : m.fm ? '宣教者' : '';
   return `<div class="mem ${cls}" id="m-${m.id}">
     <div class="l1">
@@ -515,7 +546,7 @@ function memberRow(m) {
     </div>
     <div class="l2">
       <input type="text" data-f="remarks" placeholder="備考" maxlength="180" value="${esc(stripTag(r.remarks))}" ${own ? 'disabled' : ''}>
-      ${m.pioneer ? `<span class="cr">加算<input type="number" inputmode="numeric" min="0" data-f="credit" value="${r.credit || ''}">h</span>` : ''}
+      ${m.pioneer ? `<span class="cr">加算<input type="number" inputmode="numeric" min="0" data-f="credit" value="${r.credit || ''}" ${lock ? 'disabled' : ''}>h</span>` : ''}
     </div>
     ${m.pioneer && r.actHours ? `<div class="act">本人の報告：承認された活動 ${r.actHours}時間</div>` : ''}
   </div>`;
@@ -558,11 +589,22 @@ window.addEventListener('beforeunload', (e) => { if (SQ.jobs.size || SQ.running)
 function bindMember(m, gi) {
   const el = $('#m-' + m.id); if (!el) return;
   const f = (k) => $('[data-f=' + k + ']', el);
-  const own = isOwn(m.report);
+  const own = ownRow(m), lock = lockRow(m);
   const flash = () => { el.style.background = '#eaf6ec'; setTimeout(() => el.style.background = '', 700); };
+  // 行を元の内容で描き直す（書記が確認で「キャンセル」したとき・締切後で断られたとき）。
+  // 描き直しを始めたら、古い入力欄のイベント（取り外すときの blur→change など）は無視する
+  let dead = false;
+  const redraw = () => { if (dead) return; dead = true; setTimeout(() => { const cur = $('#m-' + m.id); if (!cur) return; cur.outerHTML = memberRow(m); bindMember(m, gi); }, 0); };
+  // 書記が締切後の報告を直すときは、その画面で最初の1回だけ確かめる
+  const secOk = () => {
+    if (!ovSec() || !(m.report && m.report.locked) || OV.okLocked) return true;
+    if (confirm('締切を過ぎた報告を直します。\n支部へ送った数字は変わりません（S-21の個人の記録に反映されます）。\nよろしいですか？')) { OV.okLocked = true; return true; }
+    redraw(); return false;
+  };
+  const lockedFail = (e) => { if (e && e.code === 'locked') { m.report = Object.assign({}, m.report, { locked: true }); redraw(); } };
   const after = (report) => {
-    m.report = report; el.classList.add('has'); $('.st', el).innerHTML = rowStatus(m);
-    const w = $('.pill.warn', el); if (w) w.remove();
+    m.report = report || null; el.classList.toggle('has', !!report); $('.st', el).innerHTML = rowStatus(m);   // 行を全部空にしたときは report なし＝未提出に戻る
+    const w = $('.pill.soon', el); if (w) w.remove();
     updateGroupCounts(gi); flash(); cacheOverseer();
   };
   const capMsg = (res) => { if (res.capped) toast(`野外奉仕と加算時間は合わせて月${res.cap}時間までのため、加算を${res.credit ?? res.report.credit}時間にしました`, 'warn'); };
@@ -576,27 +618,31 @@ function bindMember(m, gi) {
     return (!m.report && empty) ? null : payload;
   };
   const save = () => {
-    if (own || needBy()) return;
+    if (dead || own || lock || needBy()) return;
     if (!collect()) return;
+    if (!secOk()) return;
     queueSave('s|' + m.id + '|' + ym, async (key) => {
       const payload = collect(); if (!payload) return;
-      const res = await call(payload, { quiet: true, retry: true });
-      if (f('credit') && !SQ.jobs.has(key)) f('credit').value = res.report.credit || '';   // 続けて入力していたら上書きしない
+      let res;
+      try { res = await call(payload, { quiet: true, retry: true }); } catch (e) { lockedFail(e); throw e; }
+      if (f('credit') && !SQ.jobs.has(key)) f('credit').value = (res.report && res.report.credit) || '';   // 続けて入力していたら上書きしない
       after(res.report); capMsg(res);
     }, el);
   };
   el.querySelectorAll('.l1 .tg').forEach(t => t.onclick = () => {
-    if (own) return;
+    if (dead || own || lock) return;
     t.classList.toggle('on');
     if (t.dataset.f === 'aux') f('hours').disabled = !(m.pioneer || t.classList.contains('on'));
     save();
   });
   ['studies', 'hours', 'remarks'].forEach(k => f(k).onchange = save);
   if (f('credit')) f('credit').onchange = () => {
+    if (dead || lock) return;
     if (!own) return save();
     if (needBy()) return;
     queueSave('c|' + m.id + '|' + ym, async (key) => {
-      const res = await call({ action: 'overseerCredit', by: OV.byId, id: m.id, ym, credit: f('credit').value || 0 }, { quiet: true, retry: true });
+      let res;
+      try { res = await call({ action: 'overseerCredit', by: OV.byId, id: m.id, ym, credit: f('credit').value || 0 }, { quiet: true, retry: true }); } catch (e) { lockedFail(e); throw e; }
       if (!SQ.jobs.has(key)) f('credit').value = res.credit || '';
       m.report.credit = res.credit; m.report.remarks = res.remarks;
       flash(); capMsg(res); cacheOverseer();
@@ -700,6 +746,10 @@ function drawSecretary(d, stale) {
     <a class="btn" href="https://hub.jw.org" target="_blank" style="text-align:center;text-decoration:none">hub.jw.org を開く</a>
   </div>
   <div id="tab-check" style="display:none">
+    <div class="card"><h3>報告を直す（締切後の修正）</h3>
+      <p class="muted">締切を過ぎた月の報告は、本人・監督・区域マップからは変更できません（まだ報告のない人の報告は出せて、翌月の会衆の報告に加えられます）。<br>
+      直す必要があるときは、下のボタンで監督用の画面を<b>書記として</b>開いてください。本人が提出した行も直せます。直しても支部へ送った数字は変わらず、S-21の個人の記録に反映されます。</p>
+      <a class="btn sec" id="fixOpen" href="${esc(location.pathname + '?api=' + encodeURIComponent(API) + '&t=' + encodeURIComponent(TOKEN) + '&mode=overseer&ym=' + d.ym)}" target="_blank" style="text-align:center;text-decoration:none">${ymLabel(d.ym)}分の報告を直す</a></div>
     <div class="card"><h3>未提出（活発な伝道者）: ${d.unsubmitted.length}名</h3><div>${d.unsubmitted.map(u => esc(u.name) + '<span class="pill">' + esc(u.group) + '</span>').join('　') || 'なし'}</div></div>
     <div class="card"><h3>活発／不活発の変化</h3><div>不活発になった: ${d.changes.toInactive.map(esc).join('・') || 'なし'}</div><div>活発に復帰: ${d.changes.toActive.map(esc).join('・') || 'なし'}</div><div class="muted">「今すぐ集計」でマスタに反映されます</div></div>
     <div class="card credit"><h3>承認された活動の時間（加算時間の確定）</h3>
@@ -1210,7 +1260,7 @@ async function downloadAllPdfs(btn) {
 (async () => {
   try {
     if (!TOKEN) throw new Error('このページは配布された専用URLから開いてください。');
-    if (MODE === 'overseer') await renderOverseer();
+    if (MODE === 'overseer') await renderOverseer(Q.ym);
     else if (MODE === 'visit') await renderVisit();
     else if (MODE === 'secretary') await renderSecretary();
     else await renderPersonal();
