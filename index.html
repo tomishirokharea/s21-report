@@ -23,7 +23,7 @@
   .field { display:flex; align-items:baseline; gap:8px; margin:4px 0 8px; }
   .field b { white-space:nowrap; }
   .field .v { flex:1; border-bottom:1px dotted #333; padding:2px 4px; font-size:17px; }
-  select, input[type=text], textarea { width:100%; font-size:16px; padding:8px; border:1px solid var(--line); border-radius:6px; }
+  select, input[type=text], input[type=password], textarea { width:100%; font-size:16px; padding:8px; border:1px solid var(--line); border-radius:6px; }
   textarea { height:72px; }
   .btn { display:block; width:100%; background:var(--blue); color:#fff; border:none; border-radius:8px; padding:14px; font-size:17px; font-weight:bold; margin-top:12px; cursor:pointer; }
   .btn.sec { background:#e9eff7; color:var(--navy); }
@@ -206,6 +206,12 @@
   /* 監督画面: 行ごとの保存の状態（保存中…／✓保存／⚠未保存） */
   .mem .sv { font-size:11px; margin-left:4px; white-space:nowrap; } .sv.wait { color:var(--gray); } .sv.ok { color:var(--ok); } .sv.err { color:var(--err); font-weight:bold; }
   .mem { transition:background .3s; }
+  /* 監督用のパスワード（画面全体に重ねる） */
+  #ovLogin { position:fixed; inset:0; z-index:30; background:rgba(27,58,99,.55); display:flex; align-items:flex-start; justify-content:center; padding:60px 16px 16px; overflow:auto; }
+  #ovLogin .card { width:100%; max-width:380px; text-align:center; }
+  #ovLogin #ovPass { width:100%; font-size:28px; letter-spacing:.35em; text-align:center; height:56px; margin-top:10px; border:2px solid var(--blue); }
+  #ovLogin .row2 { display:flex; align-items:center; justify-content:center; gap:6px; font-size:14px; margin-top:8px; }
+  #ovLogin .row2 input { width:20px; height:20px; margin:0; }
 </style>
 </head>
 <body>
@@ -247,7 +253,7 @@ async function call(payload, opt) {
     for (let i = 0; ; i++) {
       try {
         let res;
-        try { res = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(Object.assign({ t: TOKEN }, payload)), redirect: 'follow' }); }
+        try { res = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(Object.assign({ t: TOKEN }, ovSessParam(), payload)), redirect: 'follow' }); }
         catch (e) { throw Object.assign(new Error('通信できませんでした。電波の良い所でもう一度お試しください。'), { net: true, retry: true }); }
         let j;
         try { j = await res.json(); }
@@ -417,13 +423,72 @@ async function renderOverseer(ym) {
   app.classList.add('ov');
   if (ym && !/^\d{4}-\d{2}$/.test(ym)) ym = undefined;
   const gen = ++viewGen;
-  await swr('ov:' + (ym || 'cur'), { action: 'overseer', ym }, (d, st) => {
-    if (gen !== viewGen) return;
-    if (st.failed) return; // 前回の内容のまま（保存はできない状態）
-    if (!st.stale && !st.changed && OV && OV.ym === d.ym) { app.classList.remove('is-stale'); return; }
-    drawOverseer(d, st.stale);
-  }, { alsoKey: d => 'ov:' + d.ym });
+  try {
+    await swr('ov:' + (ym || 'cur'), { action: 'overseer', ym }, (d, st) => {
+      if (gen !== viewGen) return;
+      if (st.failed) return; // 前回の内容のまま（保存はできない状態）
+      if (!st.stale && !st.changed && OV && OV.ym === d.ym) { app.classList.remove('is-stale'); return; }
+      drawOverseer(d, st.stale);
+    }, { alsoKey: d => 'ov:' + d.ym });
+  } catch (e) {
+    if (e.code !== 'pass') throw e;
+    // パスワードが必要: 前回の一覧（端末の記録）を消して、パスワードを聞く
+    ovForget(); OV = null;
+    app.innerHTML = '<h1>野外奉仕報告　監督用</h1><div class="card muted" style="text-align:center">パスワードを入れると開きます</div>';
+    ovLogin(e, () => renderOverseer(ym).catch(showError));
+  }
 }
+// ------------------------------------------------------------
+// 監督用のパスワード（数字4〜6桁。書記が決める）
+//   合っていると、サーバーが「この端末の鍵」（sess）をくれる。端末に覚えておき、監督の通信に付ける
+//   最後に使ってから45日（設定で変えられる）使わないと、もう一度聞かれる。書記が変えたときも
+// ------------------------------------------------------------
+const OV_SESS_KEY = 's21_ov_sess:' + TKEY;
+function ovSessGet() { try { return localStorage.getItem(OV_SESS_KEY) || ''; } catch (e) { return ''; } }
+function ovSessSet(v) { try { if (v) localStorage.setItem(OV_SESS_KEY, v); else localStorage.removeItem(OV_SESS_KEY); } catch (e) {} }
+function ovSessParam() { if (MODE !== 'overseer') return {}; const s = ovSessGet(); return s ? { sess: s } : {}; }
+/** 鍵と、前回の一覧（端末の記録）を消す */
+function ovForget() {
+  ovSessSet('');
+  try { const pre = CACHE_PREFIX + TKEY + ':ov:'; const ks = []; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith(pre)) ks.push(k); } ks.forEach(k => localStorage.removeItem(k)); } catch (e) {}
+}
+let ovLoginWait = [];   // パスワードを入れたら続ける処理
+function ovLogin(e, then) {
+  if (then) ovLoginWait.push(then);
+  if ($('#ovLogin')) return;   // もう出ている
+  const box = document.createElement('div'); box.id = 'ovLogin';
+  box.innerHTML = `<div class="card">
+    <h3 style="margin:4px 0 6px">監督用のパスワード</h3>
+    <div class="muted">${e && e.expired ? esc(e.message) + '。<br>' : ''}書記から聞いた数字（4〜6桁）を入れてください。<br>このスマホでは、最後に使ってからしばらくは聞かれません。</div>
+    <input type="password" id="ovPass" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="current-password" aria-label="パスワード">
+    <label class="row2"><input type="checkbox" id="ovPassShow"> 数字を見せる</label>
+    <div class="msg err" id="ovPassMsg" style="display:none"></div>
+    <button class="btn" id="ovPassGo">開く</button>
+    <div class="muted" style="margin-top:10px">わからないときは書記に聞いてください。</div></div>`;
+  document.body.appendChild(box);
+  const inp = $('#ovPass'), msg = $('#ovPassMsg'), go = $('#ovPassGo');
+  setTimeout(() => inp.focus(), 50);
+  inp.oninput = () => { inp.value = inp.value.replace(/[^0-9]/g, '').slice(0, 6); msg.style.display = 'none'; };
+  $('#ovPassShow').onchange = (ev) => { inp.type = ev.target.checked ? 'text' : 'password'; };
+  const submit = async () => {
+    const v = inp.value;
+    if (!/^\d{4,6}$/.test(v)) { msg.textContent = '数字4〜6桁を入れてください'; msg.style.display = 'block'; return; }
+    go.disabled = true; go.textContent = '確かめています…';
+    try {
+      const r = await call({ action: 'ovLogin', pass: v });
+      ovSessSet(r.sess || '');
+      box.remove();
+      const w = ovLoginWait; ovLoginWait = []; w.forEach(f => { try { f(); } catch (er) {} });
+    } catch (er) {
+      msg.textContent = er.message; msg.style.display = 'block';
+      if (er.code === 'badpass') { inp.value = ''; inp.focus(); }
+    } finally { go.disabled = false; go.textContent = '開く'; }
+  };
+  go.onclick = submit;
+  inp.onkeydown = (ev) => { if (ev.key === 'Enter') submit(); };
+}
+/** 入力・加算・月締めの途中でパスワードが必要になったとき（書記がパスワードを変えた など） */
+function ovNeedPass(e, retry) { ovSessSet(''); ovLogin(e, retry); }
 /** 監督画面の端末の記録を、いまの内容で更新する（次に開いたときすぐ出るように） */
 function cacheOverseer() {
   if (!OV) return;
@@ -508,7 +573,7 @@ function drawOverseer(d, stale) {
       if ([...SQ.failed].some(k => k.endsWith('|' + OV.ym))) throw new Error('保存できていない行（⚠未保存）があります。その行をもう一度入力してください。');
       const r = await call({ action: 'closeMonth', ym: OV.ym, group: g.group, by: OV.byId });
       g.closed = r.closed; updateGroupCounts(gi); cacheOverseer(); toast(g.group + ' の月締めを記録しました');
-    } catch (e) { toast(e.message, 'err'); } finally { b.disabled = false; }
+    } catch (e) { if (e.code === 'pass') ovNeedPass(e, () => b.click()); else toast(e.message, 'err'); } finally { b.disabled = false; }
   });
   d.groups.forEach((g, gi) => g.members.forEach(m => bindMember(m, gi)));
 }
@@ -585,6 +650,11 @@ function runSaves() {
         SQ.failed.delete(key);
         if (!SQ.jobs.has(key)) saveMark(job.el, 'ok');
       } catch (e) {
+        if (e.code === 'pass') {   // パスワードが必要になった: 入れたら、この行をもう一度送る
+          SQ.failed.add(key); saveMark(job.el, 'err');
+          ovNeedPass(e, () => { if (!SQ.jobs.has(key)) { SQ.jobs.set(key, job); saveMark(job.el, 'wait'); } runSaves(); });
+          continue;
+        }
         SQ.failed.add(key); saveMark(job.el, 'err');
         toast((job.el.querySelector('.nm') ? job.el.querySelector('.nm').firstChild.textContent + '：' : '') + e.message, 'err');
       }
@@ -679,8 +749,46 @@ function secShowTab(t) {
   secTab = t;
   document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x.dataset.tab === t));
   ['hub', 'check', 'pioneer', 'pdf', 'setup'].forEach(k => { const el = $('#tab-' + k); if (el) el.style.display = k === t ? '' : 'none'; });
-  if (t === 'setup') loadMapKeyStatus();
+  if (t === 'setup') { loadMapKeyStatus(); loadOvPass(); }
   if (t === 'pdf') loadBackupStatus();
+}
+// ------------------------------------------------------------
+// 書記: 監督用のパスワード（初期設定タブ）。パスワードはサーバーにも画面にも残らない（照合用の形だけ）
+// ------------------------------------------------------------
+let ovpInfo = null, ovpLoading = false;
+async function loadOvPass() {
+  if (ovpLoading) return;
+  ovpLoading = true;
+  try { const r = await call({ action: 'ovPass', op: 'status' }, { quiet: true, retry: true }); ovpInfo = r.status; }
+  catch (e) { ovpInfo = { error: e.message }; }
+  finally { ovpLoading = false; drawOvPass(); }
+}
+function drawOvPass() {
+  const st = $('#ovpStatus'); if (!st) return;
+  const i = ovpInfo;
+  st.innerHTML = !i ? '<span class="muted">状態を確認中…</span>' : i.error ? `<div class="msg err">状態を確認できませんでした（${esc(i.error)}）</div>` :
+    i.set ? `<div class="msg ok">パスワードあり（${esc(i.setAt)} に設定）・入力済みのスマホ ${i.devices} 台<br><span class="muted">最後に使ってから${i.days}日使わないスマホは、もう一度聞かれます。</span>${i.lockedUntil ? `<br><b style="color:var(--err)">間違いが続いたため、${esc(i.lockedUntil)} まで入力を止めています。</b>` : ''}</div>`
+    : '<div class="msg warn">パスワードなし（監督用URLを知っている人は、だれでも入力できます）</div>';
+  $('#ovpSet').textContent = i && i.set ? 'パスワードを変える' : 'パスワードを決める';
+  $('#ovpClear').style.display = i && i.set ? '' : 'none';
+}
+async function setOvPass() {
+  const a = $('#ovpNew').value, b = $('#ovpNew2').value;
+  if (!/^\d{4,6}$/.test(a)) return toast('パスワードは数字4〜6桁にしてください', 'err');
+  if (a !== b) return toast('「もう一度」の数字が違います', 'err');
+  const changing = ovpInfo && ovpInfo.set;
+  if (!confirm((changing ? 'パスワードを変えます。\nすべての監督のスマホで、新しいパスワードの入力が必要になります。' : '監督用のパスワードを決めます。\n監督は次に開いたときから、パスワードを聞かれます。') + '\n\nパスワードはあとから画面で見られません。控えておいてください。\nよろしいですか？')) return;
+  const btn = $('#ovpSet'); btn.disabled = true;
+  try {
+    const r = await call({ action: 'ovPass', op: 'set', pass: a });
+    ovpInfo = r.status; $('#ovpNew').value = ''; $('#ovpNew2').value = ''; drawOvPass();
+    toast(changing ? 'パスワードを変えました。監督に新しい数字を伝えてください' : 'パスワードを決めました。監督に数字を伝えてください');
+  } catch (e) { toast(e.message, 'err'); } finally { btn.disabled = false; }
+}
+async function clearOvPass() {
+  if (!confirm('監督用のパスワードをなくしますか？\n監督用URLを知っている人は、だれでも入力できるようになります。')) return;
+  try { const r = await call({ action: 'ovPass', op: 'clear' }); ovpInfo = r.status; drawOvPass(); toast('パスワードをなくしました'); }
+  catch (e) { toast(e.message, 'err'); }
 }
 // ------------------------------------------------------------
 // 書記: S-21 の個人別の保存（巡回訪問PDFタブ）。毎月20日の夜中に自動。ここから今すぐ始めることもできる
@@ -836,6 +944,15 @@ function drawSecretary(d, stale) {
     <div class="card"><h3>監督用URL（全グループ共通・1つだけ）</h3>
       <p class="muted">全グループの監督に同じURLを配ります。開くと全員分の一覧が出るので、自分のグループを開いて入力します（他のグループの人の分も入力できます。開いたグループはその端末に記憶されます）。他のグループの提出状況も見られます。URLを知っている人は誰でも入力できるので、監督以外には渡さないでください（作り直しはスプレッドシートのメニュー「監督共通URLを作り直す」）。</p>
       <button class="btn sm sec" id="ovUrlBtn">監督用URLを表示</button><div id="ovUrl"></div></div>
+    <div class="card" id="ovp"><h3>監督用のパスワード（数字4〜6桁）</h3>
+      <p class="muted">決めておくと、監督用の画面を開いたときにパスワードを聞かれます（書記用URLで開いたときは聞かれません）。一度入れたスマホは、最後に使ってから45日間は聞かれません。<br>
+      変えると、すべての監督のスマホでもう一度入力が必要になります。監督用URLやQRは配り直さなくてかまいません。パスワードはあとから画面で見られないので、決めたら控えておいてください。</p>
+      <div id="ovpStatus"><span class="muted">状態を確認中…</span></div>
+      <input type="password" id="ovpNew" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="新しいパスワード（数字4〜6桁）" autocomplete="new-password" style="margin-top:6px">
+      <input type="password" id="ovpNew2" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="確認のため、もう一度" autocomplete="new-password" style="margin-top:6px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:14px;margin-top:6px"><input type="checkbox" id="ovpShow" style="width:20px;height:20px"> 数字を見せる</label>
+      <button class="btn sec" id="ovpSet">パスワードを決める</button>
+      <button class="btn sm sec" id="ovpClear" style="display:none">パスワードをなくす</button></div>
     <div class="card" id="mk"><h3>区域マップ連携キー</h3>
       <p class="muted">区域マップの「係の画面」→「奉仕報告（会衆の報告システム S21）」に、下の S21 のURL と連携キーを入れます。<br>
       キーは発行したときにこの画面に1回だけ表示されます（ページを閉じる・読み込み直すと消えます）。コピーしてから区域マップに切り替えて貼り付けてください。LINE やメールでは送らないでください。<br>
@@ -882,6 +999,11 @@ function drawSecretary(d, stale) {
   $('#pdf').onclick = () => secMakePdfs(d);
   $('#bkStart').onclick = startBackup;
   drawBackup();
+  $('#ovpSet').onclick = setOvPass;
+  $('#ovpClear').onclick = clearOvPass;
+  $('#ovpShow').onchange = (e) => { ['#ovpNew', '#ovpNew2'].forEach(x => { $(x).type = e.target.checked ? 'text' : 'password'; }); };
+  ['#ovpNew', '#ovpNew2'].forEach(x => { $(x).oninput = (e) => { e.target.value = e.target.value.replace(/[^0-9]/g, '').slice(0, 6); }; });
+  drawOvPass();
 }
 /** 書記: 作成済みPDFの一覧（Driveのリンク） */
 function secPdfList(s) {
