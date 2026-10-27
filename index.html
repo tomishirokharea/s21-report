@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>野外奉仕報告</title>
+<link rel="preconnect" href="https://script.google.com" crossorigin>
+<link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
 <style>
   :root { --blue:#2f5d9b; --navy:#1b3a63; --line:#d7dde6; --bg:#f4f6f9; --gray:#6b7684; --ok:#1f7a3a; --warn:#b26a00; --err:#b3261e; }
   * { box-sizing:border-box; }
@@ -78,12 +80,22 @@
   .bar { height:8px; background:#e9eff7; border-radius:4px; overflow:hidden; } .bar i { display:block; height:100%; background:var(--blue); }
   details { margin:6px 0; } summary { cursor:pointer; font-weight:bold; color:var(--navy); }
   .ro { font-size:12px; color:var(--gray); text-align:center; margin:8px 0; }
-  @media print { .noprint, .tabs, h1, .sub, #toast { display:none !important; } body { background:#fff; } .card { border:none; } #tab-pioneer { display:block !important; } #tab-hub, #tab-check, #tab-pdf, #tab-setup { display:none !important; } }
-  #loading { position:fixed; inset:0; background:rgba(255,255,255,.6); display:none; align-items:center; justify-content:center; font-weight:bold; color:var(--navy); }
+  @media print { .noprint, .tabs, h1, .sub, #toast, #sync { display:none !important; } body { background:#fff; } .card { border:none; } #tab-pioneer { display:block !important; } #tab-hub, #tab-check, #tab-pdf, #tab-setup { display:none !important; } }
+  #loading { position:fixed; inset:0; background:rgba(255,255,255,.6); display:none; align-items:center; justify-content:center; gap:10px; font-weight:bold; color:var(--navy); z-index:20; }
+  .spin { width:22px; height:22px; border:3px solid #c9d3e0; border-top-color:var(--blue); border-radius:50%; animation:spin .8s linear infinite; display:inline-block; vertical-align:middle; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  /* 前回の内容を表示しながら裏で最新を確認しているときの表示 */
+  #sync { position:fixed; top:8px; right:8px; z-index:15; background:#fff; border:1px solid var(--line); border-radius:14px; padding:3px 10px 3px 8px; font-size:12px; color:var(--gray); box-shadow:0 1px 4px rgba(0,0,0,.08); display:none; align-items:center; gap:6px; }
+  #sync.on { display:flex; } #sync .spin { width:12px; height:12px; border-width:2px; }
+  .ph { text-align:center; padding:28px 0; color:var(--gray); } .ph small { display:block; margin-top:6px; }
+  .is-stale .mem input, .is-stale .mem .tg, .is-stale .memo-btn { pointer-events:none; opacity:.55; }
+  .mem .st { font-size:11px; margin-left:4px; white-space:nowrap; } .st.wait { color:var(--gray); } .st.ok { color:var(--ok); } .st.err { color:var(--err); font-weight:bold; }
+  .mem { transition:background .3s; }
 </style>
 </head>
 <body>
-<div id="loading">読み込み中…</div>
+<div id="loading"><span class="spin"></span>処理中…</div>
+<div id="sync"><span class="spin"></span>最新を確認中…</div>
 <div class="wrap" id="app"></div>
 <script>
 // ------------------------------------------------------------
@@ -99,17 +111,92 @@ const $ = (s, el) => (el || document).querySelector(s);
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 function ymLabel(ym) { const [y, m] = ym.split('-'); return y + '年' + Number(m) + '月'; }
 function ymAdd(ym, d) { const [y, m] = ym.split('-').map(Number); const t = y * 12 + (m - 1) + d; return Math.floor(t / 12) + '-' + ('0' + ((t % 12) + 1)).slice(-2); }
-function loading(on) { $('#loading').style.display = on ? 'flex' : 'none'; }
-async function call(payload) {
-  if (!API) throw new Error('接続先(api)が指定されていません。配布されたURLから開いてください。');
-  loading(true);
-  try {
-    const res = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(Object.assign({ t: TOKEN }, payload)), redirect: 'follow' });
-    const j = await res.json();
-    if (!j.ok) throw new Error(j.error || 'エラー');
-    return j;
-  } finally { loading(false); }
+// 全画面の「処理中」は 0.25 秒以上かかるときだけ出す（重なった呼び出しも正しく数える）
+let busyN = 0, busyTimer = null;
+function loading(on) {
+  busyN = Math.max(0, busyN + (on ? 1 : -1));
+  const el = $('#loading');
+  if (busyN > 0) { if (!busyTimer && el.style.display !== 'flex') busyTimer = setTimeout(() => { busyTimer = null; if (busyN > 0) el.style.display = 'flex'; }, 250); }
+  else { clearTimeout(busyTimer); busyTimer = null; el.style.display = 'none'; }
 }
+function syncBadge(on) { $('#sync').classList.toggle('on', !!on); }
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+// 読むだけの呼び出しは、通信の失敗や混雑のとき 1 回だけ自動でやり直す
+const READ_ACTIONS = { me: 1, overseer: 1, secretary: 1, pioneerReview: 1, visit: 1 };
+async function call(payload, opt) {
+  opt = opt || {};
+  if (!API) throw new Error('接続先(api)が指定されていません。配布されたURLから開いてください。');
+  const tries = (READ_ACTIONS[payload.action] || opt.retry) ? 2 : 1;
+  if (!opt.quiet) loading(true);
+  try {
+    for (let i = 0; ; i++) {
+      try {
+        let res;
+        try { res = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(Object.assign({ t: TOKEN }, payload)), redirect: 'follow' }); }
+        catch (e) { throw Object.assign(new Error('通信できませんでした。電波の良い所でもう一度お試しください。'), { net: true, retry: true }); }
+        let j;
+        try { j = await res.json(); }
+        catch (e) { throw Object.assign(new Error('サーバーの応答を読み取れませんでした。少し待ってからもう一度お試しください。'), { net: true, retry: true }); }
+        if (!j.ok) throw Object.assign(new Error(j.error || 'エラー'), { server: true, code: j.code, retry: j.code === 'busy' });
+        return j;
+      } catch (e) {
+        if (!e.retry || i >= tries - 1) throw e;
+        await sleep(800);
+      }
+    }
+  } finally { if (!opt.quiet) loading(false); }
+}
+
+// ------------------------------------------------------------
+// 前回の内容を端末に覚えておき、開いた瞬間に表示 → 裏で最新を取りに行って差し替える
+// （キーはトークンそのものではなく、その要約。トークンごとに分けて保存）
+// ------------------------------------------------------------
+const TKEY = (() => { let h = 5381; for (const c of TOKEN) h = ((h << 5) + h + c.charCodeAt(0)) >>> 0; return MODE + '.' + h.toString(36); })();
+const CACHE_PREFIX = 's21c:';
+const CACHE_DAYS = 14;
+function cacheGet(k) {
+  try { const v = JSON.parse(localStorage.getItem(CACHE_PREFIX + TKEY + ':' + k) || 'null'); if (v && Date.now() - v.at < CACHE_DAYS * 864e5) return v.d; } catch (e) {}
+  return null;
+}
+function cacheSet(k, d) {
+  const s = JSON.stringify({ at: Date.now(), d });
+  try { localStorage.setItem(CACHE_PREFIX + TKEY + ':' + k, s); }
+  catch (e) { cachePrune(); try { localStorage.setItem(CACHE_PREFIX + TKEY + ':' + k, s); } catch (e2) {} }
+}
+function cacheDel(k) { try { localStorage.removeItem(CACHE_PREFIX + TKEY + ':' + k); } catch (e) {} }
+function cachePrune() {
+  // 容量が足りないとき: 古いものから消す
+  try {
+    const items = [];
+    for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith(CACHE_PREFIX)) { let at = 0; try { at = JSON.parse(localStorage.getItem(k)).at || 0; } catch (e) {} items.push([k, at]); } }
+    items.sort((a, b) => a[1] - b[1]).slice(0, Math.max(1, Math.ceil(items.length / 2))).forEach(([k]) => localStorage.removeItem(k));
+  } catch (e) {}
+}
+function placeholder(el) { (el || app).innerHTML = '<div class="card ph"><span class="spin"></span><br>読み込み中…<small>はじめて開くときは数秒かかります</small></div>'; }
+let viewGen = 0; // 月を切り替えたときなどに、古い応答で画面を上書きしないための番号
+
+// key の前回分があればすぐ render(cached, {stale:true})、最新が届いたら render(fresh, {stale:false, changed})
+async function swr(key, payload, render, opt) {
+  opt = opt || {};
+  const cached = cacheGet(key);
+  if (cached) { syncBadge(true); render(cached, { stale: true }); }
+  else if (opt.ph !== false) placeholder(opt.ph);
+  let fresh;
+  try { fresh = await call(payload, { quiet: true }); }
+  catch (e) {
+    syncBadge(false);
+    // 通信できない・混雑・一時的なエラーなら、前回の内容のまま使えるようにする
+    if (cached && (e.net || e.code === 'busy' || e.code === 'server')) { toast('最新の内容を確認できませんでした（前回の内容を表示中）', 'warn'); render(cached, { stale: true, failed: true }); return cached; }
+    if (cached) cacheDel(key); // URL が無効になった等は、前回分も消してエラーを出す
+    throw e;
+  }
+  syncBadge(false);
+  cacheSet(key, fresh);
+  if (opt.alsoKey) cacheSet(opt.alsoKey(fresh), fresh);
+  render(fresh, { stale: false, changed: !cached || JSON.stringify(cached) !== JSON.stringify(fresh) });
+  return fresh;
+}
+function nowLabel() { const d = new Date(), p = (n) => ('0' + n).slice(-2); return d.getFullYear() + '/' + p(d.getMonth() + 1) + '/' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); }
 function toast(text, kind) {
   let m = $('#toast'); if (!m) { m = document.createElement('div'); m.id = 'toast'; app.prepend(m); }
   m.className = 'msg ' + (kind || 'ok'); m.textContent = text; m.style.display = 'block';
@@ -120,9 +207,25 @@ function showError(e) { app.innerHTML = '<div class="card"><div class="msg err">
 // ------------------------------------------------------------
 // 個人用フォーム（S-4）
 // ------------------------------------------------------------
+let pv = null; // 表示中の個人フォーム {d, dirty}
 async function renderPersonal(ym) {
-  const d = await call({ action: 'me', ym });
+  const g = ++viewGen; pv = null;
+  await swr('me:' + (ym || 'cur'), { action: 'me', ym }, (d, st) => {
+    if (g !== viewGen) return;
+    // 入力を始めていたら、入力欄はそのままにして「提出済み」表示と履歴だけ最新にする
+    if (!st.stale && pv && pv.dirty && pv.d.ym === d.ym) { pv.d = d; personalMeta(d); sendReady(true); return; }
+    if (st.failed && pv && pv.d.ym === d.ym) { sendReady(true); return; }
+    drawPersonal(d, st.stale);
+  }, { alsoKey: d => 'me:' + d.ym });
+}
+function personalSubnote(r) { return r.submitted ? `<div class="muted" style="margin-top:8px">提出済み: ${esc(r.submitted)}（${r.source === 'overseer' ? '監督入力' : r.source === 'import' ? '取込' : r.source === 'map' ? '区域マップ' : '本人'}）。送信すると上書きされます。</div>` : ''; }
+function personalHist(d) { return `<table class="hist"><tr><th>月</th><th>伝道</th><th>研究</th><th>補助</th><th>時間</th></tr>
+  ${(d.recent || []).slice(1, 7).map(x => `<tr><td>${ymLabel(x.ym)}</td><td>${x.empty ? '—' : x.preached ? '✓' : ''}</td><td>${x.empty ? '' : x.studies || ''}</td><td>${x.empty ? '' : x.aux ? '✓' : ''}</td><td>${x.empty ? '' : x.hours || ''}</td></tr>`).join('')}</table>`; }
+function personalMeta(d) { const s = $('#subnote'), h = $('#hist'); if (s) s.innerHTML = personalSubnote(d.report || {}); if (h) h.innerHTML = personalHist(d); }
+function sendReady(on) { const b = $('#send'); if (!b) return; b.disabled = !on; b.textContent = on ? '送信' : '最新の状態を確認中…'; }
+function drawPersonal(d, stale) {
   const p = d.person, r = d.report || {};
+  pv = { d, dirty: false };
   const opts = []; for (let i = 0; i < 4; i++) { const y = ymAdd(d.ym, 1 - i); opts.push(y); }
   if (!opts.includes(d.ym)) opts.unshift(d.ym);
   app.innerHTML = `
@@ -137,44 +240,71 @@ async function renderPersonal(ym) {
     <div class="row ${p.pioneer || r.aux ? '' : 'disabled'}" id="hoursRow"><div class="lab">時間<br><span class="muted">（補助開拓者, 正規開拓者, 特別開拓者, 野外の宣教者は記入してください）</span></div><input type="number" id="hours" inputmode="numeric" min="0" value="${r.hours || ''}" ${p.pioneer || r.aux ? '' : 'disabled'}></div>
     ${p.pioneer ? `<div class="row"><div class="lab">承認された活動の時間<br><span class="muted">（LDC等。任意。報告には含まれず備考に記録）</span></div><input type="number" id="actHours" inputmode="numeric" min="0" value="${r.actHours || ''}"></div>` : ''}
     <div class="row" style="display:block"><div class="lab">備考:</div><textarea id="remarks">${esc(r.remarks || '')}</textarea></div>
-    ${r.submitted ? `<div class="muted" style="margin-top:8px">提出済み: ${esc(r.submitted)}（${r.source === 'overseer' ? '監督入力' : r.source === 'import' ? '取込' : '本人'}）。送信すると上書きされます。</div>` : ''}
-    <button class="btn" id="send">送信</button>
+    <div id="subnote">${personalSubnote(r)}</div>
+    <button class="btn" id="send" ${stale ? 'disabled' : ''}>${stale ? '最新の状態を確認中…' : '送信'}</button>
     <div class="muted" style="text-align:center;margin-top:8px">S-4-J 11/23 と同じ項目です</div>
   </div>
-  <div class="card"><h3>最近の報告</h3><table class="hist"><tr><th>月</th><th>伝道</th><th>研究</th><th>補助</th><th>時間</th></tr>
-  ${d.recent.slice(1, 7).map(x => `<tr><td>${ymLabel(x.ym)}</td><td>${x.empty ? '—' : x.preached ? '✓' : ''}</td><td>${x.empty ? '' : x.studies || ''}</td><td>${x.empty ? '' : x.aux ? '✓' : ''}</td><td>${x.empty ? '' : x.hours || ''}</td></tr>`).join('')}</table></div>`;
-  $('#ym').onchange = (e) => renderPersonal(e.target.value);
-  $('#preached').onclick = (e) => { e.target.classList.toggle('on'); e.target.textContent = e.target.classList.contains('on') ? '✓' : ''; };
-  $('#aux').onclick = (e) => { e.target.classList.toggle('on'); const on = e.target.classList.contains('on') || p.pioneer; $('#hours').disabled = !on; $('#hoursRow').classList.toggle('disabled', !on); };
+  <div class="card"><h3>最近の報告</h3><div id="hist">${personalHist(d)}</div></div>`;
+  const dirty = () => { if (pv) pv.dirty = true; };
+  app.querySelectorAll('input, textarea').forEach(el => el.addEventListener('input', dirty));
+  $('#ym').onchange = (e) => renderPersonal(e.target.value).catch(showError);
+  $('#preached').onclick = (e) => { dirty(); e.target.classList.toggle('on'); e.target.textContent = e.target.classList.contains('on') ? '✓' : ''; };
+  $('#aux').onclick = (e) => { dirty(); e.target.classList.toggle('on'); const on = e.target.classList.contains('on') || p.pioneer; $('#hours').disabled = !on; $('#hoursRow').classList.toggle('disabled', !on); };
   $('#send').onclick = async () => {
     const payload = { action: 'submit', ym: $('#ym').value, preached: $('#preached').classList.contains('on'), studies: $('#studies').value || 0, aux: $('#aux').classList.contains('on'), hours: $('#hours').value || 0, actHours: ($('#actHours') || {}).value || 0, remarks: $('#remarks').value, source: 's4' };
     if (!payload.preached && !(Number(payload.hours) > 0) && !(Number(payload.studies) > 0)) { if (!confirm('「伝道した」にチェックがありません。このまま送信しますか？')) return; }
-    try { const res = await call(payload); await renderPersonal(payload.ym); toast(ymLabel(payload.ym) + ' の報告を送信しました' + (res.late ? '（締切後のため翌月の会衆報告に加算されます）' : ''), res.late ? 'warn' : 'ok'); }
-    catch (e) { toast(e.message, 'err'); }
+    const btn = $('#send'); btn.disabled = true;
+    try {
+      const res = await call(payload);
+      // 送信後に全部を読み直さず、返ってきた内容で画面と端末の記録を更新する（通信1回分速い）
+      const n = (v) => Number(v) || 0;
+      const rep = Object.assign({ ym: payload.ym, preached: payload.preached || n(payload.hours) > 0 || n(payload.studies) > 0, studies: n(payload.studies), aux: payload.aux, hours: (p.pioneer || payload.aux) ? n(payload.hours) : 0, actHours: p.pioneer ? n(payload.actHours) : 0, remarks: payload.remarks, source: 's4', submitted: nowLabel() }, res.report || {});
+      d.report = rep;
+      (d.recent || []).forEach((x, i) => { if (x.ym === rep.ym) d.recent[i] = Object.assign({ ym: rep.ym }, rep); });
+      cacheSet('me:' + d.ym, d);
+      const cur = cacheGet('me:cur'); if (cur && cur.ym === d.ym) cacheSet('me:cur', d);
+      drawPersonal(d, false);
+      toast(ymLabel(payload.ym) + ' の報告を送信しました' + (res.late ? '（締切後のため翌月の会衆報告に加算されます）' : ''), res.late ? 'warn' : 'ok');
+    } catch (e) { btn.disabled = false; toast(e.message, 'err'); }
   };
 }
 
 // ------------------------------------------------------------
 // 監督用フォーム
 // ------------------------------------------------------------
+let ov = null; // 表示中の監督フォームのデータ
 async function renderOverseer(ym) {
-  const d = await call({ action: 'overseer', ym });
+  const g = ++viewGen;
+  await swr('ov:' + (ym || 'cur'), { action: 'overseer', ym }, (d, st) => {
+    if (g !== viewGen) return;
+    if (st.failed) return; // 前回の内容のまま（保存はできない状態）
+    if (!st.stale && !st.changed && ov && ov.ym === d.ym) { const c = $('#ovcard'); if (c) c.classList.remove('is-stale'); return; }
+    drawOverseer(d, st.stale);
+  }, { alsoKey: d => 'ov:' + d.ym });
+}
+function unsubHtml(d) { return `未提出 <b>${d.unsubmitted.length}名</b>${d.unsubmitted.length ? '（' + d.unsubmitted.map(esc).join('・') + '）' : ''}`; }
+function drawOverseer(d, stale) {
+  ov = d;
   const opts = [ymAdd(d.ym, 1), d.ym, ymAdd(d.ym, -1), ymAdd(d.ym, -2)];
   app.innerHTML = `
   <h1>${esc(d.group)}</h1>
   <div class="sub">${esc(d.congregation)}　監督: ${esc(d.overseer.name)}</div>
-  <div class="card">
+  <div class="card ${stale ? 'is-stale' : ''}" id="ovcard">
     <select id="ym">${opts.map(y => `<option value="${y}" ${y === d.ym ? 'selected' : ''}>${ymLabel(y)}</option>`).join('')}</select>
     <div style="height:10px"></div>
     <div class="mem head"><span>氏名</span><span>伝道</span><span>研究</span><span>補助</span><span>時間</span></div>
     ${d.members.map(m => memberRow(m)).join('')}
-    <div class="msg warn" id="unsub">未提出 <b>${d.unsubmitted.length}名</b>${d.unsubmitted.length ? '（' + d.unsubmitted.map(esc).join('・') + '）' : ''}</div>
-    <div class="muted">1行入力するごとに自動保存されます。本人がWEB提出した行（グレー）は上書きできません。</div>
+    <div class="msg warn" id="unsub">${unsubHtml(d)}</div>
+    <div class="muted">入力すると自動で保存されます（保存中も続けて入力できます）。本人がWEB提出した行（グレー）は上書きできません。</div>
     <button class="btn" id="close">月締め完了</button>
   </div>`;
-  $('#ym').onchange = (e) => renderOverseer(e.target.value);
-  $('#close').onclick = async () => { await call({ action: 'closeMonth', ym: d.ym }); toast('月締めを記録しました'); };
-  d.members.forEach(m => bindMember(m, d.ym));
+  $('#ym').onchange = (e) => renderOverseer(e.target.value).catch(showError);
+  $('#close').onclick = async () => {
+    const b = $('#close'); b.disabled = true;
+    try { await flushSaves(); if (SQ.failed.size) throw new Error('保存できていない行（⚠）があります。もう一度入力してください。'); await call({ action: 'closeMonth', ym: d.ym }); toast('月締めを記録しました'); }
+    catch (e) { toast(e.message, 'err'); } finally { b.disabled = false; }
+  };
+  d.members.forEach(m => bindMember(m, d));
 }
 function memberRow(m) {
   const r = m.report || {};
@@ -182,25 +312,64 @@ function memberRow(m) {
   const cls = own ? 'done' : !m.active ? 'inactive' : '';
   const warn = m.active && !own && m.monthsWithout >= 4 ? `<span class="pill warn">${6 - m.monthsWithout}カ月で不活発</span>` : '';
   return `<div class="mem ${cls}" id="m-${m.id}">
-    <div class="nm">${esc(m.name)}${own ? '<span class="pill">提出済</span>' : !m.active ? '<span class="pill">不活発</span>' : ''}${warn}<br><button class="memo-btn" data-memo="${m.id}">備考${r.remarks ? '✎' : ''}</button></div>
+    <div class="nm">${esc(m.name)}${own ? '<span class="pill">提出済</span>' : !m.active ? '<span class="pill">不活発</span>' : ''}${warn}<br><button class="memo-btn" data-memo="${m.id}">備考${r.remarks ? '✎' : ''}</button><span class="st"></span></div>
     <div class="tg ${r.preached ? 'on' : ''}" data-f="preached"></div>
     <input type="number" inputmode="numeric" data-f="studies" value="${r.studies ?? ''}" ${own ? 'disabled' : ''}>
     <div class="tg ${r.aux ? 'on' : ''}" data-f="aux"></div>
     <input type="number" inputmode="numeric" data-f="hours" value="${r.hours || ''}" ${own || !(m.pioneer || r.aux) ? 'disabled' : ''}>
   </div>`;
 }
-function bindMember(m, ym) {
+// 監督フォームの保存は画面を止めずに裏で順番に送る。
+// 同じ行を続けて変えたときは、最後の内容を1回だけ送る（チェック→研究数→時間 と入れても通信1回）。
+const SQ = { jobs: new Map(), running: null, timer: null, failed: new Set() };
+function rowStatus(el, s) {
+  const st = $('.st', el); if (!st) return;
+  clearTimeout(st._t);
+  st.className = 'st ' + s; st.textContent = s === 'wait' ? '保存中…' : s === 'ok' ? '✓保存' : '⚠未保存';
+  if (s === 'ok') { el.style.background = '#eaf6ec'; setTimeout(() => el.style.background = '', 600); st._t = setTimeout(() => { st.textContent = ''; }, 2500); }
+}
+function queueSave(key, collect, el, onSaved) {
+  SQ.jobs.set(key, { collect, el, onSaved });
+  rowStatus(el, 'wait');
+  clearTimeout(SQ.timer); SQ.timer = setTimeout(runSaves, 400);
+}
+function runSaves() {
+  if (SQ.running) return SQ.running;
+  SQ.running = (async () => {
+    while (SQ.jobs.size) {
+      const [key, job] = SQ.jobs.entries().next().value; SQ.jobs.delete(key);
+      const payload = job.collect();
+      try {
+        await call(payload, { quiet: true, retry: true });
+        SQ.failed.delete(key);
+        if (job.onSaved) job.onSaved(payload);
+        if (!SQ.jobs.has(key)) rowStatus(job.el, 'ok');
+      } catch (e) { SQ.failed.add(key); rowStatus(job.el, 'err'); toast(e.message, 'err'); }
+    }
+  })().finally(() => { SQ.running = null; });
+  return SQ.running;
+}
+async function flushSaves() { clearTimeout(SQ.timer); while (SQ.jobs.size || SQ.running) await runSaves(); }
+window.addEventListener('beforeunload', (e) => { if (SQ.jobs.size || SQ.running) { e.preventDefault(); e.returnValue = ''; } });
+
+function bindMember(m, d) {
   const el = $('#m-' + m.id); if (!el) return;
   let remarks = (m.report && m.report.remarks) || '';
   const own = m.report && (m.report.source === 's4' || m.report.source === 'map');
-  const save = async () => {
-    if (own) return;
-    const payload = { action: 'overseerSubmit', id: m.id, ym,
-      preached: $('[data-f=preached]', el).classList.contains('on'), studies: $('[data-f=studies]', el).value || 0,
-      aux: $('[data-f=aux]', el).classList.contains('on'), hours: $('[data-f=hours]', el).value || 0, remarks };
-    try { await call(payload); el.style.background = '#eaf6ec'; setTimeout(() => el.style.background = '', 600); }
-    catch (e) { toast(e.message, 'err'); }
+  const key = m.id + '|' + d.ym;
+  const collect = () => ({ action: 'overseerSubmit', id: m.id, ym: d.ym,
+    preached: $('[data-f=preached]', el).classList.contains('on'), studies: $('[data-f=studies]', el).value || 0,
+    aux: $('[data-f=aux]', el).classList.contains('on'), hours: $('[data-f=hours]', el).value || 0, remarks });
+  const onSaved = (payload) => {
+    // 端末の記録と「未提出」の表示をその場で更新（読み直し不要）
+    const n = (v) => Number(v) || 0;
+    m.report = Object.assign({}, m.report, { preached: payload.preached || n(payload.studies) > 0 || n(payload.hours) > 0, studies: n(payload.studies), aux: payload.aux, hours: (m.pioneer || payload.aux) ? n(payload.hours) : 0, remarks: payload.remarks, source: 'overseer' });
+    const i = d.unsubmitted.indexOf(m.name);
+    if (i >= 0) { d.unsubmitted.splice(i, 1); if (ov === d) { const u = $('#unsub'); if (u) u.innerHTML = unsubHtml(d); } }
+    cacheSet('ov:' + d.ym, d);
+    const cur = cacheGet('ov:cur'); if (cur && cur.ym === d.ym) cacheSet('ov:cur', d);
   };
+  const save = () => { if (!own) queueSave(key, collect, el, onSaved); };
   el.querySelectorAll('.tg').forEach(t => t.onclick = () => { if (own) return; t.classList.toggle('on'); if (t.dataset.f === 'aux') { $('[data-f=hours]', el).disabled = !(m.pioneer || t.classList.contains('on')); } save(); });
   el.querySelectorAll('input').forEach(i => i.onchange = save);
   $('[data-memo]', el).onclick = () => { const v = prompt(m.name + ' の備考', remarks); if (v !== null) { remarks = v; save(); } };
@@ -209,17 +378,36 @@ function bindMember(m, ym) {
 // ------------------------------------------------------------
 // 書記用 月次画面
 // ------------------------------------------------------------
+let secTab = 'hub', prLast = null, sec = null; // 表示中のタブ・開拓者の確認の期間・データ
 async function renderSecretary(ym) {
   app.classList.add('wide');
-  const d = await call({ action: 'secretary', ym });
+  const g = ++viewGen;
+  await swr('sec:' + (ym || 'cur'), { action: 'secretary', ym }, (d, st) => {
+    if (g !== viewGen) return;
+    if (st.failed) return; // 前回の数字のまま（コピーはできない状態）
+    if (!st.stale && !st.changed && sec && sec.ym === d.ym) { secReady(); return; }
+    drawSecretary(d, st.stale);
+  }, { alsoKey: d => 'sec:' + d.ym });
+}
+// 前回の数字を表示している間は、hub に写し間違えないようコピーできなくしておく
+function secReady() { document.querySelectorAll('.cp').forEach(b => { b.disabled = false; b.textContent = 'コピー'; }); const s = $('#secStale'); if (s) s.remove(); }
+function secShowTab(t) {
+  if (!$('#tab-' + t)) t = 'hub';
+  secTab = t;
+  document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x.dataset.tab === t));
+  ['hub', 'check', 'pioneer', 'pdf', 'setup'].forEach(k => { const el = $('#tab-' + k); if (el) el.style.display = k === t ? '' : 'none'; });
+}
+function drawSecretary(d, stale) {
+  sec = d;
   const opts = []; for (let i = -1; i < 13; i++) opts.push(ymAdd(d.ym, -i + 0)); const sel = [...new Set([ymAdd(d.ym, 1), ...opts])];
-  const kv = (k, v, note) => `<div class="kv"><div class="k">${k}${note ? '<br><span class="muted">' + note + '</span>' : ''}</div><div class="v">${v ?? '—'}</div><button class="cp" data-v="${v ?? ''}">コピー</button></div>`;
+  const kv = (k, v, note) => `<div class="kv"><div class="k">${k}${note ? '<br><span class="muted">' + note + '</span>' : ''}</div><div class="v">${v ?? '—'}</div><button class="cp" data-v="${v ?? ''}" ${stale ? 'disabled' : ''}>${stale ? '確認中' : 'コピー'}</button></div>`;
   const we = d.attendance.weekend, wd = d.attendance.weekday;
   app.innerHTML = `
   <h1>書記用 月次提出画面</h1>
   <div class="sub">${esc(d.congregation)}　<select id="ym" style="width:auto;display:inline-block">${sel.map(y => `<option value="${y}" ${y === d.ym ? 'selected' : ''}>${ymLabel(y)}分</option>`).join('')}</select></div>
   <div class="tabs"><button class="on" data-tab="hub">hub入力</button><button data-tab="check">確認事項</button><button data-tab="pioneer">開拓者の確認</button><button data-tab="pdf">巡回訪問PDF</button><button data-tab="setup">初期設定</button></div>
   <div id="tab-hub">
+    ${stale ? '<div class="msg warn" id="secStale">前回開いたときの数字を表示しています。最新の数字を確認中…（確認できるまでコピーはできません）</div>' : ''}
     <div class="msg ${d.storedAt ? 'ok' : 'warn'}">${d.storedAt ? '自動集計済み: ' + esc(d.storedAt) : 'この月はまだ自動集計されていません（下の数字は現時点の暫定値）'}　<button class="btn sm sec" id="agg">今すぐ集計して確定</button></div>
     <div class="sec-grid">
       <div>
@@ -276,12 +464,21 @@ async function renderSecretary(ym) {
       </ol>
       <div class="muted">接続先: <code>${esc(API)}</code></div></div>
   </div>`;
-  $('#ym').onchange = (e) => renderSecretary(e.target.value);
-  document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { document.querySelectorAll('.tabs button').forEach(x => x.classList.remove('on')); b.classList.add('on'); ['hub', 'check', 'pioneer', 'pdf', 'setup'].forEach(t => $('#tab-' + t).style.display = t === b.dataset.tab ? '' : 'none'); });
-  document.querySelectorAll('.cp').forEach(b => b.onclick = async () => { try { await navigator.clipboard.writeText(b.dataset.v); b.classList.add('done'); b.textContent = 'コピー済'; } catch (e) { toast('コピーできませんでした', 'err'); } });
-  $('#agg').onclick = async () => { try { await call({ action: 'aggregate', ym: d.ym }); toast('集計を確定しました'); renderSecretary(d.ym); } catch (e) { toast(e.message, 'err'); } };
+  $('#ym').onchange = (e) => renderSecretary(e.target.value).catch(showError);
+  document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => secShowTab(b.dataset.tab));
+  secShowTab(secTab);
+  document.querySelectorAll('.cp').forEach(b => b.onclick = async () => { if (b.disabled) return; try { await navigator.clipboard.writeText(b.dataset.v); b.classList.add('done'); b.textContent = 'コピー済'; } catch (e) { toast('コピーできませんでした', 'err'); } });
+  $('#agg').onclick = async () => {
+    try {
+      await call({ action: 'aggregate', ym: d.ym }); toast('集計を確定しました');
+      const f = await call({ action: 'secretary', ym: d.ym }); cacheSet('sec:' + f.ym, f);
+      const cur = cacheGet('sec:cur'); if (cur && cur.ym === f.ym) cacheSet('sec:cur', f);
+      drawSecretary(f, false);
+    } catch (e) { toast(e.message, 'err'); }
+  };
   document.querySelectorAll('[data-credit]').forEach(b => b.onclick = async () => { const [id, cym] = b.dataset.credit.split('|'); const inp = $(`input[data-id="${id}"][data-ym="${cym}"]`); try { await call({ action: 'setCredit', id, ym: cym, credit: inp.value || 0 }); toast('加算時間を記録しました'); } catch (e) { toast(e.message, 'err'); } });
   initPioneer(d.ym);
+  if (prLast) showPioneer(prLast); // 月を変えた・最新に差し替えたときも、開いていた開拓者の確認を出し直す
   $('#vissue').onclick = async () => { try { const r = await call({ action: 'issueVisitToken', days: $('#vdays').value, showAttention: $('#vatt').checked }); $('#vres').innerHTML = `<div class="msg ok">期限 ${esc(r.expires)} まで有効</div><input type="text" value="${esc(r.url)}" readonly onclick="this.select()">`; } catch (e) { toast(e.message, 'err'); } };
   $('#vrevoke').onclick = async () => { try { await call({ action: 'revokeVisitToken' }); toast('無効にしました'); $('#vres').innerHTML = ''; } catch (e) { toast(e.message, 'err'); } };
   $('#vpreview').onclick = () => { location.href = location.pathname + '?api=' + encodeURIComponent(API) + '&t=' + TOKEN + '&mode=visit'; };
@@ -302,10 +499,19 @@ function initPioneer(curYm) {
   $('#prGo').onclick = () => showPioneer(sel.value);
 }
 async function showPioneer(toYm) {
-  const out = $('#prOut');
+  prLast = toYm;
+  const g = viewGen;
   try {
-    const d = await call({ action: 'pioneerReview', toYm });
-    const mh = d.months.map(ym => '<th>' + Number(ym.split('-')[1]) + '月</th>').join('');
+    await swr('pr:' + toYm, { action: 'pioneerReview', toYm }, (d, st) => {
+      if (g !== viewGen || prLast !== toYm || !$('#prOut')) return;
+      drawPioneer(d);
+    }, { ph: $('#prOut') });
+  } catch (e) { toast(e.message, 'err'); }
+}
+function drawPioneer(d) {
+  const out = $('#prOut');
+  {
+    const mh =d.months.map(ym => '<th>' + Number(ym.split('-')[1]) + '月</th>').join('');
     const cell = (m, r) => {
       if (r.notStarted || m.ym < r.from) return '<td style="color:#c0c6cf">' + (m.reported && m.hours ? m.hours : '—') + '</td>';
       const t = m.hours + m.credit; const low = t < d.goal;
@@ -329,7 +535,7 @@ async function showPioneer(toYm) {
       「加算未確定」の月は、確認事項タブで加算時間を確定してから見直してください。</div>
       <button class="btn sec noprint" onclick="window.print()">この表を印刷する</button>
     </div>`;
-  } catch (e) { toast(e.message, 'err'); }
+  }
 }
 
 // ------------------------------------------------------------
@@ -358,9 +564,23 @@ function lineChart(series, labels, opts) {
 }
 function dlt(a, b, unit) { if (a === null || b === null || a === undefined || b === undefined) return ''; const d = Math.round((b - a) * 10) / 10; return `<span class="${d > 0 ? 'up' : d < 0 ? 'down' : ''}">${d > 0 ? '+' : ''}${d}${unit || ''}</span>`; }
 
+let visTab = 'v1', visDrawn = false;
 async function renderVisit() {
   app.classList.add('wide');
-  const d = await call({ action: 'visit' });
+  const g = ++viewGen;
+  await swr('visit', { action: 'visit' }, (d, st) => {
+    if (g !== viewGen || st.failed) return;
+    if (!st.stale && !st.changed && visDrawn) return;
+    drawVisit(d); visDrawn = true;
+  });
+}
+function visShowTab(t) {
+  if (!$('#tab-' + t)) t = 'v1';
+  visTab = t;
+  document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x.dataset.tab === t));
+  ['v1', 'v2', 'v3', 'v4', 'v5'].forEach(k => { const el = $('#tab-' + k); if (el) el.style.display = k === t ? '' : 'none'; });
+}
+function drawVisit(d) {
   const labels = d.trend.map(t => t.ym);
   const y0 = d.years[0], y1 = d.years[1];
   const tile = (n, l, delta) => `<div class="tile"><div class="n">${n ?? '—'}</div><div class="l">${l}</div>${delta ? '<div class="d">昨年度比 ' + delta + '</div>' : ''}</div>`;
@@ -424,7 +644,8 @@ async function renderVisit() {
       ${y.months.map(m => `<tr><td>${ymLabel(m.ym)}</td><td>${m.weekday ? m.weekday.count : ''}</td><td>${m.weekday ? m.weekday.total : ''}</td><td>${m.weekday ? m.weekday.avg : ''}</td><td>${m.weekend ? m.weekend.count : ''}</td><td>${m.weekend ? m.weekend.total : ''}</td><td>${m.weekend ? m.weekend.avg : ''}</td></tr>`).join('')}</table></div>`).join('')}
   </div>
   <div class="ro">閲覧専用ページです。正式な記録は S-21／S-88 のPDFをご参照ください。</div>`;
-  document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { document.querySelectorAll('.tabs button').forEach(x => x.classList.remove('on')); b.classList.add('on'); ['v1', 'v2', 'v3', 'v4', 'v5'].forEach(t => $('#tab-' + t).style.display = t === b.dataset.tab ? '' : 'none'); });
+  document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => visShowTab(b.dataset.tab));
+  visShowTab(visTab);
 }
 
 // ------------------------------------------------------------
