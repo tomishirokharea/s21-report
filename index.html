@@ -625,6 +625,53 @@ function secShowTab(t) {
   secTab = t;
   document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x.dataset.tab === t));
   ['hub', 'check', 'pioneer', 'pdf', 'setup'].forEach(k => { const el = $('#tab-' + k); if (el) el.style.display = k === t ? '' : 'none'; });
+  if (t === 'setup') loadMapKeyStatus();
+}
+// ------------------------------------------------------------
+// 書記: 区域マップ連携キー（初期設定タブ）
+//   キー本体はこのページを開いている間だけ変数に持つ（端末には保存しない・URLにも出さない）
+// ------------------------------------------------------------
+let mapKey = null;         // 発行したキー
+let mapKeyInfo;            // undefined=未確認 ／ {issued: '日時'|null} ／ {error: 'メッセージ'}
+let mapKeyLoading = false;
+async function loadMapKeyStatus() {
+  if (mapKeyLoading || (mapKeyInfo && !mapKeyInfo.error)) return;
+  mapKeyLoading = true; mapKeyInfo = undefined; drawMapKey();
+  try { const r = await call({ action: 'mapKeyStatus' }, { quiet: true, retry: true }); mapKeyInfo = { issued: r.issued || null }; }
+  catch (e) { mapKeyInfo = { error: e.message }; }
+  finally { mapKeyLoading = false; drawMapKey(); }
+}
+function drawMapKey() {
+  const st = $('#mkStatus'); if (!st) return;
+  const i = mapKeyInfo;
+  st.textContent = i === undefined ? '状態を確認中…' : i.error ? '状態を確認できませんでした' : i.issued ? (mapKey ? '' : '発行済み（' + i.issued + '）') : 'まだ発行されていません';
+  $('#mkIssue').textContent = (i && i.issued) ? '連携キーを作り直す' : '連携キーを発行';
+  $('#mkOut').innerHTML = mapKey
+    ? `<div class="msg ok" style="margin:6px 0">新しい連携キーを発行しました（${esc(i && i.issued || '')}）。今すぐ区域マップに貼り付けてください。</div>
+       <input type="text" id="mkVal" value="${esc(mapKey)}" readonly onclick="this.select()" style="font-family:ui-monospace,Menlo,monospace;font-size:13px"><button class="btn sm" id="mkCp">キーをコピー</button>`
+    : '';
+  if (mapKey) $('#mkCp').onclick = () => copyText(mapKey, $('#mkVal'), 'キーをコピーしました');
+}
+/** コピー（できないときは入力欄を選択して手でコピーできるようにする） */
+async function copyText(text, input, done) {
+  try { await navigator.clipboard.writeText(text); toast(done || 'コピーしました'); return; } catch (e) {}
+  try { input.focus(); input.select(); input.setSelectionRange(0, text.length); if (document.execCommand('copy')) { toast(done || 'コピーしました'); return; } } catch (e) {}
+  toast('自動でコピーできませんでした。欄を長押ししてコピーしてください', 'warn');
+}
+async function issueMapKey() {
+  const i = mapKeyInfo, issued = i && i.issued;
+  const msg = issued
+    ? '今の連携キー（' + issued + ' 発行）は使えなくなります。\n区域マップの係の設定にも、新しいキーを入れ直してください。\n\n作り直しますか？'
+    : (i && !i.error) ? '区域マップ連携キーを発行しますか？\n（キーはこの画面に1回だけ表示されます）'
+    : '区域マップ連携キーを発行しますか？\n前に発行したキーがあれば、使えなくなります。\n（キーはこの画面に1回だけ表示されます）';
+  if (!confirm(msg)) return;
+  const btn = $('#mkIssue'); btn.disabled = true;
+  try {
+    const r = await call({ action: 'issueMapKey' }); // 自動のやり直しはしない（2回発行しないように）
+    mapKey = r.key; mapKeyInfo = { issued: r.issued || nowLabel() };
+    drawMapKey(); toast('連携キーを発行しました');
+  } catch (e) { toast(e.message, 'err'); }
+  finally { const b = $('#mkIssue'); if (b) b.disabled = false; }
 }
 function drawSecretary(d, stale) {
   sec = d;
@@ -686,6 +733,15 @@ function drawSecretary(d, stale) {
     <div class="card"><h3>監督用URL（全グループ共通・1つだけ）</h3>
       <p class="muted">全グループの監督・補佐に同じURLを配ります。開いた人は最初に「入力する人」で自分の名前を選び、全員分の一覧の中で入力します。他のグループの提出状況も見られます。URLを知っている人は誰でも入力できるので、監督以外には渡さないでください（作り直しはスプレッドシートのメニュー「監督共通URLを作り直す」）。</p>
       <button class="btn sm sec" id="ovUrlBtn">監督用URLを表示</button><div id="ovUrl"></div></div>
+    <div class="card" id="mk"><h3>区域マップ連携キー</h3>
+      <p class="muted">区域マップの「係の画面」→「奉仕報告（会衆の報告システム S21）」に、下の S21 のURL と連携キーを入れます。<br>
+      キーは発行したときにこの画面に1回だけ表示されます（ページを閉じる・読み込み直すと消えます）。コピーしてから区域マップに切り替えて貼り付けてください。LINE やメールでは送らないでください。<br>
+      作り直すと前のキーは使えなくなるので、区域マップ側も入れ直してください。</p>
+      <div style="font-size:14px;margin-top:6px">S21 のURL</div>
+      <input type="text" id="mkApi" value="${esc(API)}" readonly onclick="this.select()"><button class="btn sm" id="mkApiCp">URLをコピー</button>
+      <div style="font-size:14px;margin-top:10px">連携キー　<span class="muted" id="mkStatus"></span></div>
+      <div id="mkOut"></div>
+      <button class="btn sec" id="mkIssue">連携キーを発行</button></div>
     <div class="card"><h3>初期設定（スプレッドシート側で行います）</h3>
       <ol style="padding-left:20px">
         <li>テンプレートのスプレッドシートを「コピーを作成」</li>
@@ -700,6 +756,9 @@ function drawSecretary(d, stale) {
   </div>`;
   $('#ym').onchange = (e) => renderSecretary(e.target.value).catch(showError);
   document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => secShowTab(b.dataset.tab));
+  drawMapKey();
+  $('#mkIssue').onclick = issueMapKey;
+  $('#mkApiCp').onclick = () => copyText(API, $('#mkApi'), 'URLをコピーしました');
   secShowTab(secTab);
   document.querySelectorAll('.cp').forEach(b => b.onclick = async () => { if (b.disabled) return; try { await navigator.clipboard.writeText(b.dataset.v); b.classList.add('done'); b.textContent = 'コピー済'; } catch (e) { toast('コピーできませんでした', 'err'); } });
   $('#agg').onclick = async () => {
