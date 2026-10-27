@@ -974,8 +974,10 @@ function drawBackup() {
   if (i.job) h += `<div class="msg warn">保存中… <b>${i.job.pos} / ${i.job.total} 人</b>（${esc(i.job.started)} 開始・${esc(i.job.by)}）<br><span class="muted">${c(i.job.counts)}。この画面を閉じても続きます。</span></div>`;
   if (i.last) {
     const l = i.last, er = l.errors || [];
-    h += `<div class="msg ${l.aborted ? 'err' : er.length ? 'warn' : 'ok'}">${l.aborted ? '前回は途中で止まりました' : '前回の保存'}: ${esc(l.finished)}（${l.total}人・${esc(l.by)}）<br>${c(l.counts)}${er.length ? `<br>うまく保存できなかった人: ${er.slice(0, 5).map(esc).join('／')}` : ''}</div>`;
+    h += `<div class="msg ${l.aborted ? 'err' : er.length ? 'warn' : 'ok'}">${l.aborted ? '前回は途中で止まりました' : '前回の保存'}: ${esc(l.finished)}（${l.total}人・${esc(l.by)}）<br>${c(l.counts)}${l.totals ? `<br>区分別合計（3区分）: 新しく作成 ${l.totals.made || 0}・変わりなし ${l.totals.same || 0}` : ''}${er.length ? `<br>うまく保存できなかった人: ${er.slice(0, 5).map(esc).join('／')}` : ''}</div>`;
   } else if (!i.job) h += '<div class="muted">まだ保存したことがありません。</div>';
+  if (i.s88) h += i.s88.error ? `<div class="msg err">S-88 の保存に失敗しました: ${esc(i.s88.finished)}（${esc(i.s88.error)}）</div>`
+    : `<div class="muted">S-88（${esc((i.s88.years || []).join('・'))}年度）: ${esc(i.s88.finished)} に保存（${i.s88.result === 'made' ? '新しく作成' : '変わりなし'}）</div>`;
   h += `<div class="muted" style="margin-top:4px">自動: ${esc(i.schedule)}${i.monthly ? '' : '（自動の登録を確認中）'}</div>`;
   if (i.folderUrl) h += `<a class="btn sm sec" href="${esc(i.folderUrl)}" target="_blank" style="text-decoration:none">保存フォルダを開く（Googleドライブ）</a>`;
   box.innerHTML = h;
@@ -1235,9 +1237,10 @@ function drawSecretary(d, stale) {
         <div id="vlList"><span class="muted">確認中…</span></div>
         <div class="vin"><input type="date" id="vlFrom" aria-label="訪問の始まりの日"> 〜 <input type="date" id="vlTo" aria-label="訪問の終わりの日"><button class="btn sm" id="vlAdd">記録する</button></div>
       </div></div>
-    <div class="card"><h3>S-21 個人別の保存（毎月20日の夜中に自動）</h3>
+    <div class="card"><h3>S-21・S-88 の保存（毎月自動）</h3>
       <p class="muted">1人1ファイル（上に昨年度・下に今年度）のS-21を、Googleドライブの「活発（① 正規開拓者・特別開拓者・野外の宣教者／② 他の全ての伝道者：グループ別）」「不活発」のフォルダに、アルファベット順の名前で保存します。万一のときの控えになり、成員が移動したときは、その人のファイルを移動先の会衆に送れます。<br>
-      グループの編成・区分が変われば、そのフォルダに移します。内容が変わった人だけ作り直し、古いファイルはゴミ箱へ移します。名簿から外れた人のファイルは「名簿にない人」に移します（消しません）。</p>
+      グループの編成・区分が変われば、そのフォルダに移します。内容が変わった人だけ作り直し、古いファイルはゴミ箱へ移します。名簿から外れた人のファイルは「名簿にない人」に移します（消しません）。<br>
+      同じフォルダに、区分別合計（① 正規開拓者・特別開拓者・野外の宣教者／② 補助開拓者／③ 他の全ての伝道者）の3つを毎月20日に、最新のS-88（会衆の集会出席者数記録）を毎月1日に保存します（「今すぐ保存する」でも両方を保存します）。</p>
       <div id="bkStatus"><span class="muted">状態を確認中…</span></div>
       <button class="btn sec" id="bkStart">今すぐ保存する</button></div>
   </div>
