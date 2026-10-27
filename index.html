@@ -49,6 +49,16 @@
   .ovtop .ovtot .n { font-size:14px; color:var(--gray); white-space:nowrap; line-height:38px; }
   .ovtop .ovtot .n b { font-size:24px; color:var(--navy); }
   .gsumh { display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-top:14px; }
+  /* 監督画面の切り替え「報告の入力｜会衆の様子」 */
+  .seg { display:flex; background:#e3e9f2; border-radius:10px; padding:3px; margin:0 0 12px; }
+  .seg button { flex:1; border:none; background:transparent; border-radius:8px; padding:9px 4px; font-size:15px; color:var(--navy); cursor:pointer; }
+  .seg button.on { background:#fff; font-weight:bold; box-shadow:0 1px 3px rgba(0,0,0,.12); }
+  .prog { display:grid; grid-template-columns:1fr 64px; gap:2px 8px; align-items:center; font-size:14px; margin:4px 0; }
+  .prog .bar { height:10px; grid-column:1 / span 2; }
+  .prog .r { text-align:right; color:var(--gray); font-size:13px; }
+  .attg { display:flex; flex-wrap:wrap; gap:6px; margin:4px 0 8px; }
+  .attg button { border:1px solid var(--line); background:#fff; border-radius:14px; padding:4px 12px; font-size:13px; color:var(--navy); }
+  .attg button.on { background:var(--blue); color:#fff; border-color:var(--blue); }
   .gsumh h3 { margin:0; }
   table.gsum { width:100%; border-collapse:collapse; font-size:13px; margin-top:6px; }
   table.gsum td, table.gsum th { border-bottom:1px solid var(--line); padding:6px 4px; text-align:center; }
@@ -450,7 +460,7 @@ function ovSessParam() { if (MODE !== 'overseer') return {}; const s = ovSessGet
 /** 鍵と、前回の一覧（端末の記録）を消す */
 function ovForget() {
   ovSessSet('');
-  try { const pre = CACHE_PREFIX + TKEY + ':ov:'; const ks = []; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith(pre)) ks.push(k); } ks.forEach(k => localStorage.removeItem(k)); } catch (e) {}
+  try { const pre = CACHE_PREFIX + TKEY + ':ov'; /* 一覧（ov:…）と会衆の様子（ovs） */ const ks = []; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith(pre)) ks.push(k); } ks.forEach(k => localStorage.removeItem(k)); } catch (e) {}
 }
 let ovLoginWait = [];   // パスワードを入れたら続ける処理
 function ovLogin(e, then) {
@@ -511,6 +521,9 @@ function drawOverseer(d, stale) {
   app.innerHTML = `
   <h1>野外奉仕報告　監督用</h1>
   <div class="sub">${esc(d.congregation)}　全グループ${d.secretary ? '（書記の修正）' : ''}</div>
+  <div class="seg" id="ovSeg"><button data-v="input">報告の入力</button><button data-v="stats">会衆の様子</button></div>
+  <div id="ovStats" style="display:none"></div>
+  <div id="ovInput">
   <div class="card">
     <div class="ovtop">
       <div class="ovym"><label>月</label><select id="ym">${opts.map(y => `<option value="${y}" ${y === d.ym ? 'selected' : ''}>${ymLabel(y)}</option>`).join('')}</select></div>
@@ -542,6 +555,7 @@ function drawOverseer(d, stale) {
     ・入力した行を全部空にすると、未提出に戻ります。伝道しなかった月の報告を残すときは、備考に「伝道なし」などと書いてください。<br>
     ・<b>加算時間</b>（開拓者のみ）：承認された活動のうち加算できる時間。野外奉仕と合わせて月${d.cap}時間までです。報告の時間には含まれず、S-21の備考に記録されます。開拓者学校などの学校の時間は上限とは別なので、備考に「開拓者学校30h」のように書いてください。<br>
     ・不活発の人は各グループの最後に薄く表示されます。報告があれば入力できます。
+  </div>
   </div>`;
 
   // 開くグループ: 描き直し前に開いていたもの → この端末で前に開いていたもの → 監督個人のURLなら本人のグループ
@@ -576,6 +590,91 @@ function drawOverseer(d, stale) {
     } catch (e) { if (e.code === 'pass') ovNeedPass(e, () => b.click()); else toast(e.message, 'err'); } finally { b.disabled = false; }
   });
   d.groups.forEach((g, gi) => g.members.forEach(m => bindMember(m, gi)));
+  document.querySelectorAll('#ovSeg button').forEach(b => b.onclick = () => ovShowView(b.dataset.v));
+  ovShowView(ovView);
+}
+// ------------------------------------------------------------
+// 監督画面「会衆の様子」: 押したときだけ読み込む（報告の入力はそのまま）。会衆全体とグループ単位の数字だけ
+// ------------------------------------------------------------
+let ovView = 'input', ovsData = null, ovsGroup = null, ovsLoading = false, ovsAt = 0;
+function ovShowView(v) {
+  ovView = v === 'stats' ? 'stats' : 'input';
+  document.querySelectorAll('#ovSeg button').forEach(b => b.classList.toggle('on', b.dataset.v === ovView));
+  const inp = $('#ovInput'), st = $('#ovStats'); if (!inp || !st) return;
+  inp.style.display = ovView === 'input' ? '' : 'none';
+  st.style.display = ovView === 'stats' ? '' : 'none';
+  if (ovView === 'stats') { drawOvStats(); loadOvStats(); }
+}
+async function loadOvStats(force) {
+  if (ovsLoading || (!force && ovsData && Date.now() - ovsAt < 5 * 60000)) return;   // 5分以内に読んだばかりなら読み直さない
+  ovsLoading = true;
+  try {
+    await swr('ovs', { action: 'ovStats' }, (d, st) => { ovsData = d; if (!st.stale) ovsAt = Date.now(); drawOvStats(); }, { ph: false });
+  } catch (e) {
+    if (e.code === 'pass') { ovsData = null; ovNeedPass(e, () => loadOvStats(true)); }
+    else { const box = $('#ovsMain'); if (box) box.innerHTML = `<div class="card"><div class="msg err">読み込めませんでした（${esc(e.message)}）</div></div>`; }
+  } finally { ovsLoading = false; }
+}
+const OVS_ATT = [
+  ['drifting', '報告が途切れている（まだ活発）', x => x.months + 'カ月未報告'],
+  ['returned', '伝道に復帰した', null],
+  ['newcomers', '伝道を始めて間もない', x => ymLabel(x.since) + '〜'],
+  ['auxStreak', '補助開拓を続けている', x => x.months + 'カ月連続'],
+  ['newlyBaptized', 'バプテスマから1年以内', x => x.date],
+  ['studiesUp', '聖書レッスンが増えた', x => x.from + '→' + x.to],
+  ['studiesDown', '聖書レッスンが減った', x => x.from + '→' + x.to],
+  ['inactive', '不活発な伝道者', x => x.sy ? x.sy + '年度〜' : ''],
+];
+function drawOvStats() {
+  const st = $('#ovStats'); if (!st || !OV) return;
+  // 1. 今月の提出の進み具合（監督の一覧から数える。すぐ出る）
+  const gs = OV.d.groups.filter(g => g.members.length).map(g => { const act = g.members.filter(m => m.active); const sub = act.filter(m => m.report).length; return { group: g.group || '（グループなし）', sub, n: act.length, rate: act.length ? Math.round(sub / act.length * 100) : 0 }; });
+  const tot = gs.reduce((a, g) => [a[0] + g.sub, a[1] + g.n], [0, 0]);
+  let h = `<div class="card"><h3>${ymLabel(OV.ym)}分の提出の進み具合</h3>
+    <div class="prog"><b>会衆全体</b><span class="r"><b>${tot[0]}</b> / ${tot[1]}名</span><div class="bar"><i style="width:${tot[1] ? Math.round(tot[0] / tot[1] * 100) : 0}%"></i></div></div>
+    ${gs.map(g => `<div class="prog"><span>${esc(g.group)}</span><span class="r">${g.sub} / ${g.n}名</span><div class="bar"><i style="width:${g.rate}%"></i></div></div>`).join('')}
+    <div class="muted" style="margin-top:4px">活発な伝道者のうち、報告が出ている人数です。月は「報告の入力」で選んでいる月です。</div></div>
+  <div id="ovsMain">`;
+  const d = ovsData;
+  if (!d) h += '<div class="card ph"><span class="spin"></span><br>読み込み中…</div>';
+  else {
+    const T = d.trend, L = T[T.length - 1] || {}, P = T.find(t => t.ym === ymAdd(L.ym || d.asOf, -12)) || {};
+    const lm = L.ym ? Number(L.ym.slice(5)) + '月' : '';
+    const tile = (n, l, delta) => `<div class="tile"><div class="n">${n ?? '—'}</div><div class="l">${l}</div>${delta ? '<div class="d">前年同月 ' + delta + '</div>' : ''}</div>`;
+    const studies = (t) => t && t.studies;
+    const labels = T.map(t => t.ym), by = (k) => T.map(t => t.studiesBy ? t.studiesBy[k] : null);
+    const y0 = d.years[0], y1 = d.years[1];
+    h += `<div class="card"><h3>${lm}の会衆（締切が過ぎた最後の月）</h3><div class="tiles">
+        ${tile(L.active, '活発な伝道者', dlt(P.active, L.active))}
+        ${tile(L.weekend, '週末の集会（平均）', dlt(P.weekend, L.weekend))}
+        ${tile(L.weekday, '週日の集会（平均）', dlt(P.weekday, L.weekday))}
+        ${tile(studies(L), '聖書レッスン', dlt(studies(P), studies(L)))}
+        ${tile(L.pioneers, '正規・特別開拓者・宣教者', dlt(P.pioneers, L.pioneers))}
+        ${tile(L.aux, '補助開拓者', dlt(P.aux, L.aux))}
+      </div></div>
+      <div class="card"><h3>活発な伝道者と集会の出席</h3>${lineChart([{ name: '活発な伝道者', values: T.map(t => t.active), color: '#2f5d9b' }, { name: '週末の集会', values: T.map(t => t.weekend), color: '#1f7a3a' }, { name: '週日の集会', values: T.map(t => t.weekday), color: '#b26a00' }], labels)}</div>
+      <div class="card"><h3>開拓者の人数</h3>${lineChart([{ name: '正規・特別・宣教者', values: T.map(t => t.pioneers), color: '#2f5d9b' }, { name: '補助開拓者', values: T.map(t => t.aux), color: '#b26a00' }], labels, { zero: true, unit: '人' })}<div class="muted">その月に報告した人数</div></div>
+      <div class="card"><h3>聖書レッスン（会衆全体）</h3>${stackChart([{ name: '正規・特別・宣教者', values: by('pioneer'), color: '#2f5d9b' }, { name: '補助開拓者', values: by('aux'), color: '#b26a00' }, { name: '伝道者', values: by('other'), color: '#8a6fd1' }], labels)}<div class="muted">その月に司会された個別の聖書レッスンの数（色は司会した人の区分）</div></div>
+      <div class="card"><h3>昨年度との比べ（月の平均）</h3><table class="v"><tr><th></th><th>${y0.sy}年度</th><th>${y1.sy}年度</th><th>差</th></tr>
+        ${[['活発な伝道者', 'active'], ['報告の数', 'reports'], ['週末の集会', 'weekend'], ['週日の集会', 'weekday'], ['聖書レッスン', 'studies'], ['補助開拓者', 'aux'], ['正規・特別・宣教者', 'pioneers']].map(([l, k]) => `<tr><td class="l">${l}</td><td>${y0[k] ?? '—'}</td><td>${y1[k] ?? '—'}</td><td>${dlt(y0[k], y1[k])}</td></tr>`).join('')}</table>
+        <div class="muted" style="margin-top:4px">${y1.sy}年度は${y1.months}カ月分（${lm}まで）の平均です。</div></div>
+      <div class="card"><h3>グループ別（${lm}までの3カ月）</h3><table class="v"><tr><th>グループ</th><th>人数</th><th>開拓者</th><th colspan="2">報告率</th><th>レッスン</th></tr>
+        ${d.groups.map(g => `<tr><td class="l">${esc(g.group)}</td><td>${g.members}</td><td>${g.pioneers}</td><td>${g.rate}%</td><td style="min-width:60px"><div class="bar"><i style="width:${g.rate}%"></i></div></td><td>${g.studies}</td></tr>`).join('')}</table>
+        <div class="muted" style="margin-top:4px">報告率 =（報告あり）÷（活発な人数×3カ月）</div></div>`;
+    if (d.attention) {
+      const names = Object.keys(d.attention).sort((a, b) => a.localeCompare(b, 'ja'));
+      if (!ovsGroup || names.indexOf(ovsGroup) < 0) { const mine = ovOpenGet().filter(g => names.indexOf(g) >= 0); ovsGroup = mine[0] || (OV.d.me && names.indexOf(OV.d.me.group) >= 0 ? OV.d.me.group : names[0]); }
+      const a = d.attention[ovsGroup] || {};
+      const blocks = OVS_ATT.filter(([k]) => a[k] && a[k].length).map(([k, t, f]) => `<div style="margin-top:8px"><b style="font-size:14px">${t}（${a[k].length}）</b><div class="att" style="margin-top:4px">${a[k].map(x => `<span>${esc(x.name)}${f ? ' <small>' + esc(f(x)) + '</small>' : ''}</span>`).join('')}</div></div>`).join('');
+      h += `<div class="card"><h3>グループの気にかけたい人</h3>
+        <div class="attg">${names.map(g => `<button data-g="${esc(g)}" class="${g === ovsGroup ? 'on' : ''}">${esc(g)}</button>`).join('')}</div>
+        ${blocks || '<div class="muted">該当する人はいません</div>'}
+        <div class="ro" style="text-align:left">報告の有無・聖書レッスンの数・バプテスマの日付から機械的に出した一覧です。評価ではありません。</div></div>`;
+    }
+    h += `<div class="ro">${esc(d.generated)} 時点（30分ごとに新しくなります）</div>`;
+  }
+  st.innerHTML = h + '</div>';
+  st.querySelectorAll('.attg button').forEach(b => b.onclick = () => { ovsGroup = b.dataset.g; drawOvStats(); });
 }
 function updateGroupCounts(gi) {
   const g = OV.d.groups[gi];
