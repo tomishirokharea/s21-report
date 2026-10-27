@@ -117,6 +117,12 @@
   .tile .d { font-size:12px; } .up { color:var(--ok); } .down { color:var(--err); }
   .tile .d .na, .tile .l small { color:var(--gray); font-size:11px; }
   .tsub { font-size:12px; color:var(--gray); font-weight:bold; margin:12px 0 6px; }
+  .fnd h3 { font-size:16px; }
+  .fsec { border-left:4px solid var(--line); padding:4px 0 4px 10px; margin-top:10px; }
+  .fsec b { font-size:14px; } .fsec ul { margin:4px 0 0; padding-left:18px; } .fsec li { margin:3px 0; font-size:14px; line-height:1.5; }
+  .fsec.good { border-color:#1f7a3a; } .fsec.good b { color:#1f7a3a; }
+  .fsec.imp { border-color:#b26a00; } .fsec.imp b { color:#8a5200; }
+  .fsec.oth { border-color:#9aa5b5; } .fsec.oth b { color:#4a5566; }
   .chg { background:#f3f5f8; border-radius:8px; padding:8px 10px; margin-top:10px; font-size:13px; }
   .vlog { margin-top:14px; border-top:1px solid var(--line); padding-top:10px; }
   .vlog .vi { display:flex; align-items:center; gap:6px 10px; padding:7px 0; border-bottom:1px solid #eef1f5; font-size:14px; flex-wrap:wrap; }
@@ -660,18 +666,19 @@ function drawOvStats() {
         ${tile(L.weekend, '週末の集会（平均）' + (L.weekendHall != null ? `<br>会館 ${L.weekendHall}・Zoom ${L.weekendZoom}` : ''), dlt(P.weekend, L.weekend))}
         ${tile(L.weekday, '週日の集会（平均）' + (L.weekdayHall != null ? `<br>会館 ${L.weekdayHall}・Zoom ${L.weekdayZoom}` : ''), dlt(P.weekday, L.weekday))}
         ${tile(studies(L), '聖書レッスン', dlt(studies(P), studies(L)))}
-        ${tile(L.pioneers, '正規・特別開拓者・宣教者', dlt(P.pioneers, L.pioneers))}
+        ${tile(L.pioneers, '正規開拓者', dlt(P.pioneers, L.pioneers))}
         ${tile(L.aux, '補助開拓者', dlt(P.aux, L.aux))}
       </div></div>
+      ${membersNote(T.filter(t => t.src === 'members').map(t => t.ym))}
       <div class="card"><h3>活発な伝道者と集会の出席</h3>${lineChart([{ name: '活発な伝道者', values: T.map(t => t.active), color: '#2f5d9b' }, { name: '週末の集会', values: T.map(t => t.weekend), color: '#1f7a3a' }, { name: '週日の集会', values: T.map(t => t.weekday), color: '#b26a00' }], labels)}</div>
       ${T.some(t => t.weekendHall != null || t.weekdayHall != null) ? `<div class="card"><h3>集会の出席：会館とZoom（1回あたりの平均）</h3>
         <div style="font-size:13px;font-weight:bold;margin-top:4px">週末の集会</div>${stackChart([{ name: '会館', values: T.map(t => t.weekendHall), color: '#2f5d9b' }, { name: 'Zoom', values: T.map(t => t.weekendZoom), color: '#1f7a3a' }], labels)}
         <div style="font-size:13px;font-weight:bold;margin-top:8px">週日の集会</div>${stackChart([{ name: '会館', values: T.map(t => t.weekdayHall), color: '#2f5d9b' }, { name: 'Zoom', values: T.map(t => t.weekdayZoom), color: '#1f7a3a' }], labels)}
         <div class="muted">案内係が LINE に投稿した会館・Zoom の人数から。棒の高さが1回あたりの合計です。</div></div>` : ''}
-      <div class="card"><h3>開拓者の人数</h3>${lineChart([{ name: '正規・特別・宣教者', values: T.map(t => t.pioneers), color: '#2f5d9b' }, { name: '補助開拓者', values: T.map(t => t.aux), color: '#b26a00' }], labels, { zero: true, unit: '人' })}<div class="muted">その月に報告した人数</div></div>
-      <div class="card"><h3>聖書レッスン（会衆全体）</h3>${stackChart([{ name: '正規・特別・宣教者', values: by('pioneer'), color: '#2f5d9b' }, { name: '補助開拓者', values: by('aux'), color: '#b26a00' }, { name: '伝道者', values: by('other'), color: '#8a6fd1' }], labels)}<div class="muted">その月に司会された個別の聖書レッスンの数（色は司会した人の区分）</div></div>
+      <div class="card"><h3>開拓者の人数</h3>${lineChart([{ name: '正規開拓者', values: T.map(t => t.pioneers), color: '#2f5d9b' }, { name: '補助開拓者', values: T.map(t => t.aux), color: '#b26a00' }], labels, { zero: true, unit: '人' })}<div class="muted">その月に報告した人数</div></div>
+      <div class="card"><h3>聖書レッスン（会衆全体）</h3>${stackChart([{ name: '正規開拓者', values: by('pioneer'), color: '#2f5d9b' }, { name: '補助開拓者', values: by('aux'), color: '#b26a00' }, { name: '伝道者', values: by('other'), color: '#8a6fd1' }], labels)}<div class="muted">その月に司会された個別の聖書レッスンの数（色は司会した人の区分）</div></div>
       <div class="card"><h3>昨年度との比べ（${yr ? yr + 'の同じ月' : '月の平均'}）</h3><table class="v"><tr><th></th><th>${y0.sy}年度</th><th>${y1.sy}年度</th><th>差</th></tr>
-        ${[['活発な伝道者', 'active'], ['報告の数', 'reports'], ['週末の集会', 'weekend'], ['週日の集会', 'weekday'], ['聖書レッスン', 'studies'], ['補助開拓者', 'aux'], ['正規・特別・宣教者', 'pioneers']].map(([l, k]) => `<tr><td class="l">${l}</td><td>${y0[k] ?? '—'}</td><td>${y1[k] ?? '—'}</td><td>${dlt(y0[k], y1[k])}</td></tr>`).join('')}</table>
+        ${[['活発な伝道者', 'active'], ['報告の数', 'reports'], ['週末の集会', 'weekend'], ['週日の集会', 'weekday'], ['聖書レッスン', 'studies'], ['補助開拓者', 'aux'], ['正規開拓者', 'pioneers']].map(([l, k]) => `<tr><td class="l">${l}</td><td>${y0[k] ?? '—'}</td><td>${y1[k] ?? '—'}</td><td>${dlt(y0[k], y1[k])}</td></tr>`).join('')}</table>
         <div class="muted" style="margin-top:4px">どちらも${yr}の${y1.months}カ月の月平均です。「—」は昨年度の同じ月の記録がそろっていないもの（保管期間を過ぎた月・この仕組みを始める前の月）。</div></div>
       <div class="card"><h3>グループ別（${lm}までの3カ月）</h3><table class="v"><tr><th>グループ</th><th>人数</th><th>開拓者</th><th colspan="2">報告率</th><th>レッスン</th></tr>
         ${d.groups.map(g => `<tr><td class="l">${esc(g.group)}</td><td>${g.members}</td><td>${g.pioneers}</td><td>${g.rate}%</td><td style="min-width:60px"><div class="bar"><i style="width:${g.rate}%"></i></div></td><td>${g.studies}</td></tr>`).join('')}</table>
@@ -863,7 +870,7 @@ function secShowTab(t) {
   secTab = t;
   document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x.dataset.tab === t));
   ['hub', 'check', 'pioneer', 'pdf', 'setup'].forEach(k => { const el = $('#tab-' + k); if (el) el.style.display = k === t ? '' : 'none'; });
-  if (t === 'setup') { loadMapKeyStatus(); loadOvPass(); loadAttHist(); }
+  if (t === 'setup') { loadMapKeyStatus(); loadOvPass(); loadAttHist(); loadHubNumbers(); loadRoster(); }
   if (t === 'pdf') { loadBackupStatus(); loadVisits(); }
 }
 // ------------------------------------------------------------
@@ -975,6 +982,105 @@ function drawBackup() {
   const b = $('#bkStart'); if (b) b.disabled = !!i.job;
   if (i.job && secTab === 'pdf') bkTimer = setTimeout(loadBackupStatus, 20000);   // 保存中は20秒ごとに進み具合を見る
 }
+// ------------------------------------------------------------
+// 書記: 支部に送った数字（過去の月。初期設定タブ）。hub の S-1 と同じ並び
+// ------------------------------------------------------------
+const HN_FIELDS = [
+  ['active', '活発な伝道者全員'], ['weekend', '週末の集会の平均出席者数（空でも可）'],
+  ['pubCount', '伝道者：報告の数'], ['pubStudies', '伝道者：聖書レッスン'],
+  ['auxCount', '補助開拓者：報告の数'], ['auxHours', '補助開拓者：時間'], ['auxStudies', '補助開拓者：聖書レッスン'],
+  ['rpCount', '正規開拓者：報告の数'], ['rpHours', '正規開拓者：時間'], ['rpStudies', '正規開拓者：聖書レッスン'],
+];
+let hnInfo = null, hnLoading = false, hnOpen = null;
+async function loadHubNumbers() {
+  if (hnLoading) return;
+  hnLoading = true;
+  try { hnInfo = await call({ action: 'hubNumbers', op: 'list' }, { quiet: true, retry: true }); }
+  catch (e) { hnInfo = { error: e.message }; }
+  finally { hnLoading = false; drawHubNumbers(); }
+}
+function drawHubNumbers() {
+  const box = $('#hnList'); if (!box) return;
+  const i = hnInfo;
+  if (!i) { box.innerHTML = '<span class="muted">確認中…</span>'; return; }
+  if (i.error) { box.innerHTML = `<div class="msg err">確認できませんでした（${esc(i.error)}）</div>`; return; }
+  const pill = (m) => m.src === 'hub' ? '<span class="pill ok">入力済み</span>' : m.src === 'auto' ? '<span class="pill">この仕組みで集計</span>' : '<span class="pill warn">未入力</span>';
+  const need = i.months.filter(m => m.src === 'none' && (!i.firstAuto || m.ym < i.firstAuto)).length;
+  box.innerHTML = (need ? `<div class="msg warn" style="margin-top:0">未入力の月が ${need} カ月あります（この仕組みを始める前の月）</div>` : '') +
+    '<div class="vlog" style="border:none;margin:0;padding:0">' + i.months.map(m => `<div class="vi"><span class="t"><b>${esc(ymLabel(m.ym))}</b> ${pill(m)}</span><button class="btn sm sec" data-hn="${m.ym}">${m.src === 'none' ? '入れる' : '直す'}</button></div>
+      ${hnOpen === m.ym ? hnForm(m) : ''}`).join('') + '</div>';
+  box.querySelectorAll('[data-hn]').forEach(b => b.onclick = () => { hnOpen = hnOpen === b.dataset.hn ? null : b.dataset.hn; drawHubNumbers(); });
+  const f = $('#hnForm');
+  if (f) {
+    $('#hnSave').onclick = saveHubNumbers;
+    const c = $('#hnClear'); if (c) c.onclick = clearHubNumbers;
+    f.querySelectorAll('input').forEach(x => { x.oninput = () => { x.value = x.value.replace(/[^0-9]/g, '').slice(0, 5); }; });
+  }
+}
+function hnForm(m) {
+  const v = m.values || {};
+  return `<div id="hnForm" style="background:#f6f8fb;border-radius:8px;padding:8px 10px;margin:4px 0 8px">
+    ${m.src === 'auto' ? '<div class="muted" style="margin-bottom:4px">この月はこの仕組みで集計した数字です。hub に送った数字と違うときだけ直してください。</div>' : ''}
+    ${HN_FIELDS.map(([k, l]) => `<div class="kv"><span class="k">${l}</span><input type="text" inputmode="numeric" pattern="[0-9]*" data-k="${k}" value="${v[k] === null || v[k] === undefined ? '' : esc(v[k])}" style="width:90px;font-size:17px;text-align:right;padding:6px;border:1px solid #9aa5b5;border-radius:5px"></div>`).join('')}
+    <button class="btn" id="hnSave">${esc(ymLabel(m.ym))}の数字を保存</button>
+    ${m.src === 'hub' ? '<button class="btn sm sec" id="hnClear">入れた数字を消す</button>' : ''}</div>`;
+}
+async function saveHubNumbers() {
+  const values = {}; let miss = '';
+  $('#hnForm').querySelectorAll('input[data-k]').forEach(x => { values[x.dataset.k] = x.value; if (x.value === '' && x.dataset.k !== 'weekend' && !miss) miss = HN_FIELDS.find(f => f[0] === x.dataset.k)[1]; });
+  if (miss) { toast('「' + miss + '」を入れてください（0 のときは 0）', 'warn'); return; }
+  const m = hnInfo.months.find(x => x.ym === hnOpen);
+  if (m && m.src === 'auto' && !confirm(ymLabel(m.ym) + 'は、この仕組みで集計した数字を、入れた数字に置き換えます。よろしいですか？')) return;
+  const b = $('#hnSave'); b.disabled = true;
+  try { hnInfo = await call({ action: 'hubNumbers', op: 'set', ym: hnOpen, values }); toast(ymLabel(hnOpen) + 'の数字を保存しました'); hnOpen = null; drawHubNumbers(); }
+  catch (e) { toast(e.message, 'err'); b.disabled = false; }
+}
+async function clearHubNumbers() {
+  if (!confirm(ymLabel(hnOpen) + 'に入れた数字を消しますか？')) return;
+  try { hnInfo = await call({ action: 'hubNumbers', op: 'clear', ym: hnOpen }); toast('消しました'); hnOpen = null; drawHubNumbers(); }
+  catch (e) { toast(e.message, 'err'); }
+}
+
+// ------------------------------------------------------------
+// 書記: 転出・転入（初期設定タブ）
+// ------------------------------------------------------------
+let rsInfo = null, rsLoading = false;
+async function loadRoster() {
+  if (rsLoading) return;
+  rsLoading = true;
+  try { rsInfo = await call({ action: 'roster', op: 'list' }, { quiet: true, retry: true }); }
+  catch (e) { rsInfo = { error: e.message }; }
+  finally { rsLoading = false; drawRoster(); }
+}
+function drawRoster() {
+  const sel = $('#rsPerson'), box = $('#rsList'); if (!sel || !box) return;
+  const i = rsInfo;
+  if (!i || i.error) { box.innerHTML = i ? `<div class="msg err">名簿を確認できませんでした（${esc(i.error)}）</div>` : '<span class="muted">名簿を確認中…</span>'; return; }
+  const keep = sel.value;
+  const opt = (p) => `<option value="${esc(p.id)}">${esc(p.name)}${p.group ? '（' + esc(p.group) + '）' : ''}${p.outYm ? '　転出 ' + esc(p.outYm) : ''}${p.inYm ? '　転入 ' + esc(p.inYm) : ''}</option>`;
+  sel.innerHTML = '<option value="">人を選ぶ</option>' + i.people.filter(p => p.current).map(opt).join('') +
+    (i.people.some(p => !p.current) ? '<optgroup label="転出した人">' + i.people.filter(p => !p.current).map(opt).join('') + '</optgroup>' : '');
+  sel.value = keep;
+  const marked = i.people.filter(p => p.outYm || p.inYm);
+  box.innerHTML = marked.length ? '<div class="vlog">' + marked.map(p => `<div class="vi"><span class="t"><b>${esc(p.name)}</b> <span class="muted">${esc(p.group || '')}</span><br>
+      ${p.outYm ? `転出 ${esc(ymLabel(p.outYm))}${p.current ? '' : '<span class="pill">名簿から外れています</span>'}` : ''}${p.outYm && p.inYm ? '・' : ''}${p.inYm ? `転入 ${esc(ymLabel(p.inYm))}` : ''}</span></div>`).join('') + '</div>'
+    : '<div class="muted" style="margin-top:8px">転出・転入を入れた人はまだいません。</div>';
+}
+function rosterPick() {
+  const p = rsInfo && rsInfo.people && rsInfo.people.find(x => x.id === $('#rsPerson').value);
+  $('#rsOut').value = p ? p.outYm : ''; $('#rsIn').value = p ? p.inYm : '';
+}
+async function saveRoster() {
+  const id = $('#rsPerson').value;
+  if (!id) { toast('人を選んでください', 'warn'); return; }
+  const p = rsInfo.people.find(x => x.id === id), outYm = $('#rsOut').value, inYm = $('#rsIn').value;
+  if (outYm && outYm !== p.outYm && !confirm(`${p.name}さんを ${ymLabel(outYm)} から転出にします。\nこの月から名簿・監督の画面・個人用URLから外れます（過去の月の合計には残ります）。よろしいですか？`)) return;
+  const b = $('#rsSave'); b.disabled = true;
+  try { rsInfo = await call({ action: 'roster', op: 'set', id, outYm, inYm }); drawRoster(); toast('保存しました'); }
+  catch (e) { toast(e.message, 'err'); }
+  finally { b.disabled = false; }
+}
+
 // ------------------------------------------------------------
 // 書記: 訪問の日付（巡回訪問PDFタブ）。ダッシュボードの「前回の訪問からの変化」に使う
 // ------------------------------------------------------------
@@ -1136,6 +1242,19 @@ function drawSecretary(d, stale) {
       <button class="btn sec" id="bkStart">今すぐ保存する</button></div>
   </div>
   <div id="tab-setup" style="display:none">
+    <div class="card" id="hn"><h3>支部に送った数字（過去の月）</h3>
+      <p class="muted">この仕組みを始める前の月は、取り込んだS-21（今いる人の分だけ）から数えているため、移って行った人の分が入っていません。hub.jw.org で過去の月の報告（S-1）を見て、同じ数字を入れてください。巡回訪問ダッシュボードや「会衆の様子」の会衆全体の数字は、入れた数字を使います。保管するのは今年度と昨年度です。</p>
+      <div id="hnList"><span class="muted">確認中…</span></div></div>
+    <div class="card" id="rs"><h3>転出・転入</h3>
+      <p class="muted">移って行った人は、名簿（伝道者マスタ）から消さずに「転出した月」（この月から他の会衆）を入れてください。名簿・監督の画面・個人用URL・S-21の一覧からは外れ、過去の月の会衆の合計にはそのまま残ります（消すと、その人の過去の報告が過去の月の合計から消えてしまいます）。<br>
+      移って来た人は、名簿に加えたあと「転入した月」（この月からこの会衆）を入れると、前の会衆での月を会衆の合計に数えません。</p>
+      <select id="rsPerson"><option value="">人を選ぶ</option></select>
+      <div class="vin" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <label style="font-size:14px;flex:1 1 140px">転出した月<input type="month" id="rsOut" style="display:block;width:100%;font-size:16px;padding:6px;border:1px solid var(--line);border-radius:6px"></label>
+        <label style="font-size:14px;flex:1 1 140px">転入した月<input type="month" id="rsIn" style="display:block;width:100%;font-size:16px;padding:6px;border:1px solid var(--line);border-radius:6px"></label>
+      </div>
+      <button class="btn sec" id="rsSave">保存する</button>
+      <div id="rsList"></div></div>
     <div class="card"><h3>監督用URL（全グループ共通・1つだけ）</h3>
       <p class="muted">全グループの監督に同じURLを配ります。開くと全員分の一覧が出るので、自分のグループを開いて入力します（他のグループの人の分も入力できます。開いたグループはその端末に記憶されます）。他のグループの提出状況も見られます。URLを知っている人は誰でも入力できるので、監督以外には渡さないでください（作り直しはスプレッドシートのメニュー「監督共通URLを作り直す」）。</p>
       <button class="btn sm sec" id="ovUrlBtn">監督用URLを表示</button><div id="ovUrl"></div></div>
@@ -1201,6 +1320,9 @@ function drawSecretary(d, stale) {
   $('#bkStart').onclick = startBackup;
   drawBackup();
   $('#vlAdd').onclick = addVisit;
+  drawHubNumbers(); drawRoster();
+  $('#rsPerson').onchange = rosterPick;
+  $('#rsSave').onclick = saveRoster;
   $('#vlFrom').onchange = (e) => { const t = $('#vlTo'); if (e.target.value && (!t.value || t.value < e.target.value)) t.value = e.target.value; };
   drawVisits();
   $('#ovpSet').onclick = setOvPass;
@@ -1384,6 +1506,23 @@ function dayRange(a, b) {
 }
 /** 差（0 は ±0） */
 function dlt0(a, b) { if (a === null || b === null || a === undefined || b === undefined) return ''; const x = Math.round((b - a) * 10) / 10; return x ? dlt(a, b) : '±0'; }
+/** 前回の訪問から: よくなった点・改善できそうな点（サーバーが決まった基準で拾った文。名前は出さない） */
+function findingsCard(d) {
+  const F = d.findings, S = d.since; if (!F || !S) return '';
+  const ul = (arr) => '<ul>' + arr.map(x => `<li>${esc(x.text)}</li>`).join('') + '</ul>';
+  return `<div class="card fnd"><h3>${S.visit ? `前回の訪問（${dayRange(S.visit.from, S.visit.to)}）から` : '直近6カ月'}</h3>
+    <div class="muted">${monthRange(S.from, S.to)}分までの報告と集会から${S.visit ? `（前回の訪問の数字は${monthJa(S.baseYm)}分まで）` : '（前回の訪問の日付が記録されていません）'}</div>
+    <div class="fsec good"><b>よくなった点</b>${F.good.length ? ul(F.good) : '<div class="muted">基準を超えて変わったものはありません</div>'}</div>
+    <div class="fsec imp"><b>改善できそうな点</b>${F.improve.length ? ul(F.improve) : '<div class="muted">基準を超えて変わったものはありません</div>'}</div>
+    ${F.other.length ? `<div class="fsec oth"><b>そのほかの変化</b>${ul(F.other)}</div>` : ''}
+    <div class="muted" style="margin-top:8px">数字から決まった基準で拾ったものです（名前は出していません）。集会・聖書レッスン・補助開拓は、時期で上下するため1年前の同じ月と比べています。${F.notes.map(esc).join('')}</div>
+  </div>`;
+}
+/** 今いる人の記録だけから数えた月（支部に送った数字が未入力）の注記 */
+function membersNote(list) {
+  if (!list || !list.length) return '';
+  return `<div class="msg warn" style="font-size:13px">${esc(ymLabel(list[0]))}${list.length > 1 ? '〜' + esc(ymLabel(list[list.length - 1])) : ''}は、支部に送った数字がまだ入っていないため、今いる人の記録から数えています（移って行った人の分が入っていません）。比べる計算には使っていません。</div>`;
+}
 /**
  * 前回の訪問からの変化（記録がなければ直近6カ月）。その時点の人数は前回の訪問時の月と、
  * 月で上下するもの（集会・聖書レッスン・補助開拓）は期間の平均を1年前の同じ月と比べる
@@ -1398,13 +1537,14 @@ function sinceCard(d) {
   const sp = (k) => S.split && S.split[k] && S.split[k].hall !== null && S.split[k].hall !== undefined ? S.split[k] : null;
   const hall = (k) => { const x = sp(k); return x ? `<br>会館 ${x.hall}・Zoom ${x.zoom}${x.n < S.months ? ` <small>（内訳は${x.n}カ月分）</small>` : ''}` : ''; };
   const hallAgo = (k) => { const x = sp(k); return x && x.base ? `<br>会館 1年前 ${x.base.hall}（${dlt0(x.base.hall, x.hall)}）` : ''; };
+  const part = (k) => S.avgN && S.avg[k] != null && S.avgN[k] < S.months ? ` <small>（${S.avgN[k]}カ月分）</small>` : '';
   const c = S.changes || {};
   const chg = [`バプテスマ ${c.baptized || 0}名`, c.becameInactive != null ? `不活発になった ${c.becameInactive}名` : '', c.becameActive != null ? `活発になった ${c.becameActive}名` : ''].filter(Boolean);
-  return `<div class="card"><h3>${S.visit ? `前回の訪問（${dayRange(S.visit.from, S.visit.to)}）からの変化` : '直近6カ月の変化'}</h3>
+  return `<div class="card sincec"><h3>数字で見る変化</h3>
     <div class="muted" style="margin-bottom:8px">${S.visit ? `前回の訪問の数字は${b}分まででした。今回は${monthJa(S.to)}分まで（締切が過ぎた月）です。` : `前回の訪問の日付が記録されていないため、6カ月前（${b}分）と比べています。`}</div>
     <div class="tiles">
       ${point(S.now.active, '活発な伝道者', S.base.active)}
-      ${point(S.now.pioneers, '正規・特別開拓者・宣教者 <small>（その月に報告）</small>', S.base.pioneers)}
+      ${point(S.now.pioneers, '正規開拓者 <small>（その月に報告）</small>', S.base.pioneers)}
       ${tl(S.now.inactive, '不活発な伝道者', '')}
       ${tl(d.counts.elders + ' / ' + d.counts.ms, '長老 / 援助奉仕者', '')}
     </div>
@@ -1412,10 +1552,10 @@ function sinceCard(d) {
     <div class="tiles">
       ${tl(S.avg.weekend, '週末の集会（1回平均）' + hall('weekend'), ago('weekend') + hallAgo('weekend'))}
       ${tl(S.avg.weekday, '週日の集会（1回平均）' + hall('weekday'), ago('weekday') + hallAgo('weekday'))}
-      ${tl(S.avg.studies, '聖書レッスン（月平均）', ago('studies'))}
-      ${tl(S.avg.aux, '補助開拓者（月平均）', ago('aux'))}
+      ${tl(S.avg.studies, '聖書レッスン（月平均）' + part('studies'), ago('studies'))}
+      ${tl(S.avg.aux, '補助開拓者（月平均）' + part('aux'), ago('aux'))}
     </div>
-    <div class="chg">この間に　${chg.join('・')}${c.becameActive ? '<br><span class="muted">活発になった人には、伝道を再開した人・新しい伝道者・移って来た人を含みます。</span>' : ''}</div>
+    <div class="chg">この間に　${chg.join('・')}${c.movedOut || c.movedIn ? `・転出 ${c.movedOut}名・転入 ${c.movedIn}名` : ''}${c.becameActive ? '<br><span class="muted">活発になった人は、伝道を再開した人・新しく伝道を始めた人です（転入した人は含みません）。</span>' : ''}</div>
     <div class="muted" style="margin-top:6px">集会や補助開拓は時期で上下するため（記念式のころは補助開拓が増える など）、期間の平均は1年前の同じ月と比べています。「記録なし」は、保管期間を過ぎた月・この仕組みを始める前の月です。</div>
   </div>`;
 }
@@ -1451,19 +1591,21 @@ function drawVisit(d) {
   <div class="sub">${esc(d.congregation)}　${d.sy} 奉仕年度（${ymLabel(d.asOf)} 分まで）　<span class="muted">作成 ${esc(d.generated)}${d.expires ? '／閲覧期限 ' + esc(d.expires) : ''}</span></div>
   <div class="tabs"><button class="on" data-tab="v1">全体</button><button data-tab="v2">${att ? '気にかけたい人' : '活発/不活発'}</button><button data-tab="v3">グループ</button><button data-tab="v4">S-21</button><button data-tab="v5">S-88</button></div>
   <div id="tab-v1">
+    ${findingsCard(d)}
     ${sinceCard(d)}
+    ${membersNote(d.membersOnly)}
     <div class="card"><h3>活発な伝道者と集会出席の推移</h3>${lineChart([{ name: '活発な伝道者', values: d.trend.map(t => t.active), color: '#2f5d9b' }, { name: '週末出席', values: d.trend.map(t => t.weekend), color: '#1f7a3a' }, { name: '週日出席', values: d.trend.map(t => t.weekday), color: '#b26a00' }], labels, { mark: mk })}
       ${mk ? '<div class="muted">点線は前回の訪問（その右が訪問の後の月）</div>' : ''}</div>
     ${d.trend.some(t => t.weekendHall != null || t.weekdayHall != null) ? `<div class="card"><h3>集会の出席：会館とZoom（1回あたりの平均）</h3>
       <div style="font-size:13px;font-weight:bold;margin-top:4px">週末の集会</div>${stackChart([{ name: '会館', values: d.trend.map(t => t.weekendHall), color: '#2f5d9b' }, { name: 'Zoom', values: d.trend.map(t => t.weekendZoom), color: '#1f7a3a' }], labels, { mark: mk })}
       <div style="font-size:13px;font-weight:bold;margin-top:8px">週日の集会</div>${stackChart([{ name: '会館', values: d.trend.map(t => t.weekdayHall), color: '#2f5d9b' }, { name: 'Zoom', values: d.trend.map(t => t.weekdayZoom), color: '#1f7a3a' }], labels, { mark: mk })}
       <div class="muted">案内係が LINE に投稿した会館・Zoom の人数から。棒の高さが1回あたりの合計です。</div></div>` : ''}
-    <div class="card"><h3>開拓者の人数</h3>${lineChart([{ name: '正規・特別・宣教者', values: d.trend.map(t => t.pioneers), color: '#2f5d9b' }, { name: '補助開拓者', values: d.trend.map(t => t.aux), color: '#b26a00' }], labels, { zero: true, unit: '人', mark: mk })}
+    <div class="card"><h3>開拓者の人数</h3>${lineChart([{ name: '正規開拓者', values: d.trend.map(t => t.pioneers), color: '#2f5d9b' }, { name: '補助開拓者', values: d.trend.map(t => t.aux), color: '#b26a00' }], labels, { zero: true, unit: '人', mark: mk })}
       <div class="muted">その月に報告した人数</div></div>
-    <div class="card"><h3>聖書レッスン（会衆全体）</h3>${stackChart([{ name: '正規・特別・宣教者', values: by('pioneer'), color: '#2f5d9b' }, { name: '補助開拓者', values: by('aux'), color: '#b26a00' }, { name: '伝道者', values: by('other'), color: '#8a6fd1' }], labels, { mark: mk })}
+    <div class="card"><h3>聖書レッスン（会衆全体）</h3>${stackChart([{ name: '正規開拓者', values: by('pioneer'), color: '#2f5d9b' }, { name: '補助開拓者', values: by('aux'), color: '#b26a00' }, { name: '伝道者', values: by('other'), color: '#8a6fd1' }], labels, { mark: mk })}
       <div class="muted">その月に司会された個別の聖書レッスンの数。棒の高さが会衆全体の合計、色の内訳は司会した人の区分です。</div></div>
     <div class="card"><h3>昨年度との比べ（${yr ? yr + 'の同じ月' : '同じ月'}）</h3><table class="v"><tr><th></th><th>${y0.sy}年度</th><th>${y1.sy}年度</th><th>差</th></tr>
-      ${[['活発な伝道者', 'active'], ['報告の数', 'reports'], ['週末出席', 'weekend'], ['週日出席', 'weekday'], ['聖書レッスン', 'studies'], ['補助開拓者', 'aux'], ['正規・特別・宣教者', 'pioneers']].map(([l, k]) => `<tr><td class="l">${l}</td><td>${y0[k] ?? '—'}</td><td>${y1[k] ?? '—'}</td><td>${dlt(y0[k], y1[k])}</td></tr>`).join('')}</table>
+      ${[['活発な伝道者', 'active'], ['報告の数', 'reports'], ['週末出席', 'weekend'], ['週日出席', 'weekday'], ['聖書レッスン', 'studies'], ['補助開拓者', 'aux'], ['正規開拓者', 'pioneers']].map(([l, k]) => `<tr><td class="l">${l}</td><td>${y0[k] ?? '—'}</td><td>${y1[k] ?? '—'}</td><td>${dlt(y0[k], y1[k])}</td></tr>`).join('')}</table>
       <div class="muted" style="margin-top:4px">どちらも${yr}の${y1.months}カ月の月平均です。「—」は昨年度の同じ月の記録がそろっていないもの（保管期間を過ぎた月・この仕組みを始める前の月）。${y1.months < 3 ? `今年度はまだ${y1.months}カ月分です。終わったばかりの${y0.sy}年度の1年間は、上のグラフと「S-21」タブ（${y0.sy}年度で開きます）で見られます。` : ''}</div></div>
   </div>
   <div id="tab-v2" style="display:none">
