@@ -934,7 +934,7 @@ function secShowTab(t) {
   secTab = t;
   document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x.dataset.tab === t));
   ['hub', 'check', 'pioneer', 'pdf', 'setup'].forEach(k => { const el = $('#tab-' + k); if (el) el.style.display = k === t ? '' : 'none'; });
-  if (t === 'setup') { loadGroupRoster(); loadMapKeyStatus(); loadOvPass(); loadAttHist(); loadHubNumbers(); loadRoster(); }
+  if (t === 'setup') { loadGroupRoster(); loadMapKeyStatus(); loadOvPass(); loadNotify(); loadAttHist(); loadHubNumbers(); loadRoster(); }
   if (t === 'pdf') { loadBackupStatus(); loadVisits(); }
 }
 // ------------------------------------------------------------
@@ -969,6 +969,51 @@ async function setOvPass() {
     ovpInfo = r.status; $('#ovpNew').value = ''; $('#ovpNew2').value = ''; drawOvPass();
     toast(changing ? 'パスワードを変えました。監督に新しい数字を伝えてください' : 'パスワードを決めました。監督に数字を伝えてください');
   } catch (e) { toast(e.message, 'err'); } finally { btn.disabled = false; }
+}
+// ------------------------------------------------------------
+// 書記: お知らせのメール（初期設定タブ。2026-10-28〜）。報告が全員そろったとき・締切日の朝にまだの人がいるとき、書記にメール
+//   届け先は書記が入れる（書記が変わったら書き換えるだけ）。メールを送る許可（会衆アカウントで一度だけ）がまだなら、その旨を出す
+// ------------------------------------------------------------
+let ntInfo = null, ntLoading = false, ntDirty = false;
+async function loadNotify() {
+  if (ntLoading) return;
+  ntLoading = true;
+  try { const r = await call({ action: 'notify', op: 'status' }, { quiet: true, retry: true }); ntInfo = r.status; }
+  catch (e) { ntInfo = { error: e.message }; }
+  finally { ntLoading = false; drawNotify(); }
+}
+function drawNotify() {
+  const st = $('#ntStatus'); if (!st) return;
+  const i = ntInfo;
+  const at = (s) => { const m = String(s || '').match(/^\d{4}-(\d{2})-(\d{2}) (\d{2}):(\d{2})/); return m ? Number(m[1]) + '/' + Number(m[2]) + ' ' + Number(m[3]) + ':' + m[4] : ''; };
+  if (!i) { st.innerHTML = '<span class="muted">状態を確認中…</span>'; return; }
+  if (i.error) { st.innerHTML = `<div class="msg err">状態を確認できませんでした（${esc(i.error)}）</div>`; return; }
+  const auth = i.auth === 'ok' ? '' : `<div class="msg warn">メールを送る許可がまだ出ていません。会衆のアカウントで一度だけ許可が必要です（仕組みの担当者に伝えてください）。許可が出るまで、お知らせは送られません。</div>`;
+  const to = i.emails && i.emails.length ? `<div class="msg ok">届け先: ${i.emails.map(esc).join('、')}</div>` : '<div class="muted">届け先がまだありません。</div>';
+  const sent = (i.sent || []).filter(x => x.all || x.remind).map(x => `<div class="muted">${esc(ymLabel(x.ym))}分: ${[x.remind ? 'まだの人のお知らせ ' + esc(at(x.remind)) : '', x.all ? '全員そろったお知らせ ' + esc(at(x.all)) : ''].filter(Boolean).join('・')}</div>`).join('');
+  const err = i.lastError && i.auth === 'ok' ? `<div class="muted">前回のエラー: ${esc(i.lastError)}</div>` : '';
+  st.innerHTML = auth + to + sent + err;
+  const inp = $('#ntEmails');
+  if (inp && !ntDirty) inp.value = (i.emails || []).join(', ');
+}
+async function saveNotify() {
+  const v = $('#ntEmails').value.trim();
+  if (!v && !confirm('届け先を空にします。お知らせのメールは送られなくなります。よろしいですか？')) return;
+  const btn = $('#ntSave'); btn.disabled = true;
+  try {
+    const r = await call({ action: 'notify', op: 'set', emails: v });
+    ntInfo = r.status; ntDirty = false; drawNotify();
+    toast(v ? '保存しました。「テストメールを送る」で届くか確かめてください' : '届け先を空にしました');
+  } catch (e) { toast(e.message, 'err'); } finally { btn.disabled = false; }
+}
+async function testNotify() {
+  if (ntDirty) return toast('先に「保存する」を押してください', 'err');
+  const btn = $('#ntTest'); btn.disabled = true;
+  try {
+    const r = await call({ action: 'notify', op: 'test' });
+    ntInfo = r.status; drawNotify();
+    toast('テストメールを送りました。届いたか確かめてください（迷惑メールのフォルダも）');
+  } catch (e) { toast(e.message, 'err'); if (e.code === 'noauth') loadNotify(); } finally { btn.disabled = false; }
 }
 // ------------------------------------------------------------
 // 書記: LINE のトーク履歴から、過去の集会の会館・Zoom の内訳を取り込む（初期設定タブ）。正式な記録（S-88）は変えない
@@ -1920,6 +1965,13 @@ function drawSecretary(d, stale) {
       <label style="display:flex;align-items:center;gap:6px;font-size:14px;margin-top:6px"><input type="checkbox" id="ovpShow" style="width:20px;height:20px"> 数字を見せる</label>
       <button class="btn sec" id="ovpSet">パスワードを決める</button>
       <button class="btn sm sec" id="ovpClear" style="display:none">パスワードをなくす</button></div>
+    <div class="card" id="nt"><h3>お知らせのメール（報告がそろったとき・${d.deadline || 10}日の朝）</h3>
+      <p class="muted">活発な伝道者の報告が全員そろうと、ここに入れたアドレスにメールでお知らせします（最後の人が入力してから1時間以内）。まだの人がいるときは、毎月${d.deadline || 10}日の朝に、前の月の報告がまだの人の名前をお知らせします。<br>
+      書記が変わったら、新しい書記のアドレスに書き換えてください。いくつか入れるときは「,」で区切ります（5つまで）。</p>
+      <div id="ntStatus"><span class="muted">状態を確認中…</span></div>
+      <input type="text" id="ntEmails" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="例: shoki@example.com" style="margin-top:6px">
+      <button class="btn sec" id="ntSave">保存する</button>
+      <button class="btn sm sec" id="ntTest">テストメールを送る</button></div>
     <div class="card" id="ah"><h3>集会の出席：会館とZoomの内訳（LINEのトーク履歴から）</h3>
       <p class="muted">案内係のLINEグループで「トーク履歴を送信」したテキストを読み込むと、過去の集会ごとの会館・Zoom の人数を取り込めます（監督用の画面「会衆の様子」のグラフに使います）。取り込む前に、いまの記録と比べた表が出ます。正式な記録（S-88）は変わりません。取り込み直すと、前の分と入れ替わります。</p>
       <div id="ahStatus"><span class="muted">状態を確認中…</span></div>
@@ -1983,6 +2035,10 @@ function drawSecretary(d, stale) {
   $('#grManual').onclick = manualGroupRoster;
   drawGroupStatus(); drawGroupPreview();   // 描き直したときも、確認中の内容はそのまま
   $('#ovpClear').onclick = clearOvPass;
+  $('#ntSave').onclick = saveNotify;
+  $('#ntTest').onclick = testNotify;
+  $('#ntEmails').oninput = () => { ntDirty = true; };
+  drawNotify();
   $('#ovpShow').onchange = (e) => { ['#ovpNew', '#ovpNew2'].forEach(x => { $(x).type = e.target.checked ? 'text' : 'password'; }); };
   ['#ovpNew', '#ovpNew2'].forEach(x => { $(x).oninput = (e) => { e.target.value = e.target.value.replace(/[^0-9]/g, '').slice(0, 6); }; });
   drawOvPass();
