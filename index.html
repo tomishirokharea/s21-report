@@ -435,10 +435,10 @@ function bindMonthDial(el, onPick) {
     e.preventDefault(); go(Math.max(0, Math.min(its.length - 1, at() + (e.key === 'ArrowDown' ? 1 : -1))), true);
   };
 }
-// 締切（翌月10日）を過ぎた月は、本人・監督からは出せない・直せない（書記に伝えてもらい、書記が入力する。2026-10-28〜）
+// 締め切られた月（書記が「報告完了」にした月。押し忘れても支部への報告の期限（翌月20日）を過ぎた月）は、本人・監督からは出せない・直せない
+// （書記に伝えてもらい、書記が入力する。2026-10-28 夜〜 締切日の10日では締め切らない）
 function personalSubnote(r, d) {
-  // 書記が「報告完了」にした月（締切の前でも送れない・変えられない。2026-10-28〜）
-  const why = d && d.done ? '書記が「報告完了」にした' : '締切' + (d ? '（' + deadlineLabel(d.ym, d.deadline) + '）' : '') + 'を過ぎた';
+  const why = d && d.done ? '書記が「報告完了」にした' : '支部への報告の期限' + (d ? '（' + deadlineLabel(d.ym, d.hubDay || 20) + '）' : '') + 'を過ぎた';
   if (!r.submitted) return d && d.locked ? `<div class="msg warn">${why}ため、${ymLabel(d.ym)}分の報告はここからは送れません。<br><b>まだ報告していないときは、書記に伝えてください</b>（書記が入力します）。</div>` : '';
   const who = r.source === 'overseer' ? '監督入力' : r.source === 'import' ? '取込' : r.source === 'transfer' ? '前の会衆' : r.source === 'map' ? '区域マップ' : '本人';
   if (r.locked || (d && d.locked)) return `<div class="msg warn">提出済み: ${esc(r.submitted)}（${who}）<br>${why}ため、この月の報告は変更できません。直す必要があるときは、書記に伝えてください（書記が直します）。</div>`;
@@ -450,7 +450,7 @@ function personalMeta(d) { const s = $('#subnote'), h = $('#hist'); if (s) s.inn
 function sendReady(on) { const b = $('#send'); if (!b) return; b.disabled = !on; b.textContent = on ? '送信' : '最新の状態を確認中…'; }
 function drawPersonal(d, stale) {
   const p = d.person, r = d.report || {};
-  const ro = !!r.locked || !!d.locked;   // 締切後の月: 見るだけ（送れない・変えられない。書記に伝える）
+  const ro = !!r.locked || !!d.locked;   // 締め切られた月: 見るだけ（送れない・変えられない。書記に伝える）
   const dis = ro ? 'disabled' : '';
   pv = { d, dirty: false };
   const opts = []; for (let i = 0; i < 4; i++) { const y = ymAdd(d.ym, 1 - i); opts.push(y); }
@@ -492,10 +492,10 @@ function drawPersonal(d, stale) {
       cacheSet('me:' + d.ym, d);
       const cur = cacheGet('me:cur'); if (cur && cur.ym === d.ym) cacheSet('me:cur', d);
       drawPersonal(d, false);
-      toast(ymLabel(payload.ym) + ' の報告を送信しました' + (res.late ? '（締切後のため翌月の会衆報告に加算されます）' : ''), res.late ? 'warn' : 'ok');
+      toast(ymLabel(payload.ym) + ' の報告を送信しました' + (res.late ? '（支部への報告の期限の後のため、翌月の会衆報告に加算されます）' : ''), res.late ? 'warn' : 'ok');
     } catch (e) {
       btn.disabled = false; toast(e.message, 'err');
-      if (e.code === 'locked') { cacheDel('me:' + payload.ym); renderPersonal(payload.ym).catch(showError); }   // 締切後で変更できない月: 見るだけの表示にする
+      if (e.code === 'locked') { cacheDel('me:' + payload.ym); renderPersonal(payload.ym).catch(showError); }   // 締め切られた月: 見るだけの表示にする
     }
   };
 }
@@ -514,7 +514,7 @@ let OV = null;
 // 書記トークンで開いたとき（書記の修正）は、締切後の行・本人提出の行も直せる
 const ovSec = () => !!(OV && OV.d && OV.d.secretary);
 const ownRow = (m) => isOwn(m.report) && !ovSec();                     // 本人提出（監督は数字・備考を変えない）
-const lockRow = (m) => !ovSec() && (!!(OV && OV.d && OV.d.locked) || !!(m.report && m.report.locked));   // 締切後の月（監督は入力も変更もできない。書記に伝える）
+const lockRow = (m) => !ovSec() && (!!(OV && OV.d && OV.d.locked) || !!(m.report && m.report.locked));   // 締め切られた月（監督は入力も変更もできない。書記に伝える）
 
 async function renderOverseer(ym) {
   app.classList.add('ov');
@@ -599,16 +599,15 @@ function drawOverseer(d, stale) {
   // 入力する人は選ばない（共通URLは監督として記録。監督個人のURLは本人、書記のURLは書記）
   const byId = d.secretary ? '' : d.me ? d.me.id : '';
   OV = { d, ym: d.ym, byId, okLocked: false };
-  const dl = deadlineLabel(d.ym, d.deadline);
-  // 締切後・報告完了の月の注意（監督: 入力も変更もできない／書記: 入力・修正できる）
+  // 報告完了・支部への報告の期限の後の月の注意（監督: 入力も変更もできない／書記: 入力・修正できる）
   const hubLabel = deadlineLabel(d.ym, d.hubDay || 20);
   const doneAt = d.done && d.done.at ? '（' + doneLabel(d.done.at) + '）' : '';
   const lockNote = !d.locked ? '' : d.secretary
     ? (d.done ? `<div class="msg warn">${ymLabel(d.ym)}分は「報告完了」にしています${doneAt}。<b>書記として開いているので、入力・修正ができます。</b>支部へ送った数字と変わる場合は、hub も直してください。</div>`
-      : `<div class="msg warn">${ymLabel(d.ym)}分は締切（${dl}）を過ぎています。<b>書記として開いているので、まだ報告のない人の入力と、入力済みの報告（本人提出を含む）の修正ができます。</b><br>
-      支部への報告の期限（${hubLabel}）までに入れた報告は、${ymLabel(d.ym)}分の数字に入ります。期限を過ぎてから入れた報告は、次に支部へ送る月の会衆の報告に加えられます（「締切後に提出」と表示）。すでに数えた報告を直しても、数えた月のまま残ります。</div>`)
+      : `<div class="msg warn">${ymLabel(d.ym)}分は支部への報告の期限（${hubLabel}）を過ぎています（「報告完了」はまだ押していません）。<b>書記として開いているので、まだ報告のない人の入力と、入力済みの報告（本人提出を含む）の修正ができます。</b><br>
+      いま入れた報告は、次に支部へ送る月の会衆の報告に加えられます（「期限後に提出」と表示）。すでに数えた報告を直しても、数えた月のまま残ります。</div>`)
     : d.done ? `<div class="msg warn">🔒 ${ymLabel(d.ym)}分は、書記が「報告完了」にしました${doneAt}。<b>入力も変更もできません。</b><br>まだ報告していない人・直す必要がある人は、書記に伝えてください（書記が入力します）。</div>`
-    : `<div class="msg warn">🔒 ${ymLabel(d.ym)}分は締切（${dl}）を過ぎました。<b>入力も変更もできません。</b><br>まだ報告していない人・直す必要がある人は、書記に伝えてください（書記が入力します）。</div>`;
+    : `<div class="msg warn">🔒 ${ymLabel(d.ym)}分は支部への報告の期限（${hubLabel}）を過ぎました。<b>入力も変更もできません。</b><br>まだ報告していない人・直す必要がある人は、書記に伝えてください（書記が入力します）。</div>`;
   // グループの横に出す監督（補佐は出さない。古いサーバーの応答なら監督の印の人）
   const leaderOf = (g) => g.leader !== undefined ? (g.leader ? '監督 ' + g.leader : '') : g.overseers.join('・');
   app.innerHTML = `
@@ -643,7 +642,7 @@ function drawOverseer(d, stale) {
   <div class="card muted">
     ・1行入力するごとに自動保存されます（保存した行は一瞬緑色になります）。<br>
     ・グレーの行は本人がWEBで提出したものです。数字と備考は変えられませんが、開拓者の<b>加算時間</b>は入力できます。<br>
-    ・締切（翌月${d.deadline || 10}日）を過ぎた月と、書記が「報告完了」にした月は、まだ報告のない人の入力も、入力済みの報告（🔒）の変更（加算時間を含む）もできません。書記に伝えてください（書記が入力します）。<br>
+    ・書記が hub への入力を終えて「報告完了」にした月は、まだ報告のない人の入力も、入力済みの報告（🔒）の変更（加算時間を含む）もできません。書記に伝えてください（書記が入力します）。「報告完了」の前なら、締切の${d.deadline || 10}日を過ぎても入力できます（支部への報告の期限の翌月${d.hubDay || 20}日を過ぎた月はできません）。<br>
     ・入力した行を全部空にすると、未提出に戻ります。伝道しなかった月の報告を残すときは、備考に「伝道なし」などと書いてください。<br>
     ・<b>加算時間</b>（開拓者のみ）：承認された活動のうち加算できる時間。野外奉仕と合わせて月${d.cap}時間までです。報告の時間には含まれず、S-21の備考に記録されます。開拓者学校などの学校の時間は上限とは別なので、備考に「開拓者学校30h」のように書いてください。<br>
     ・不活発の人は各グループの最後に薄く表示されます。報告があれば入力できます。
@@ -783,7 +782,7 @@ function updateGroupCounts(gi) {
 }
 function rowStatus(m) {
   const r = m.report;
-  const tail = !r ? '' : (r.late ? '<span class="pill warn">締切後に提出</span>' : '') + (r.locked ? '<span class="pill" title="締切を過ぎたため変更できません（書記のみ）">🔒</span>' : '');
+  const tail = !r ? '' : (r.late ? '<span class="pill warn">期限後に提出</span>' : '') + (r.locked ? '<span class="pill" title="締め切られた月のため変更できません（書記のみ）">🔒</span>' : '');
   if (isOwn(r)) return '<span class="pill">本人提出</span>' + tail;
   if (r && r.source === 'overseer') return '<span class="pill ok">入力済</span>' + tail;
   if (r) return '<span class="pill">' + (r.source === 'import' ? '取込' : r.source === 'transfer' ? '前の会衆' : '入力済') + '</span>' + tail;
@@ -856,14 +855,14 @@ function bindMember(m, gi) {
   const f = (k) => $('[data-f=' + k + ']', el);
   const own = ownRow(m), lock = lockRow(m);
   const flash = () => { el.style.background = '#eaf6ec'; setTimeout(() => el.style.background = '', 700); };
-  // 行を元の内容で描き直す（書記が確認で「キャンセル」したとき・締切後で断られたとき）。
+  // 行を元の内容で描き直す（書記が確認で「キャンセル」したとき・締め切られた月で断られたとき）。
   // 描き直しを始めたら、古い入力欄のイベント（取り外すときの blur→change など）は無視する
   let dead = false;
   const redraw = () => { if (dead) return; dead = true; setTimeout(() => { const cur = $('#m-' + m.id); if (!cur) return; cur.outerHTML = memberRow(m); bindMember(m, gi); }, 0); };
-  // 書記が締切後の報告を直すときは、その画面で最初の1回だけ確かめる
+  // 書記が締め切られた月の報告を直すときは、その画面で最初の1回だけ確かめる
   const secOk = () => {
     if (!ovSec() || !(m.report && m.report.locked) || OV.okLocked) return true;
-    if (confirm('締切を過ぎた報告を直します。\n支部への報告の期限（翌月' + (OV.d.hubDay || 20) + '日）を過ぎていれば、支部へ送った数字は変わりません（S-21の個人の記録に反映されます）。\nよろしいですか？')) { OV.okLocked = true; return true; }
+    if (confirm('締め切られた月（報告完了・支部への報告の期限の後）の報告を直します。\n支部への報告の期限（翌月' + (OV.d.hubDay || 20) + '日）を過ぎていれば、支部へ送った数字は変わりません（S-21の個人の記録に反映されます）。期限の前なら、hub も直してください。\nよろしいですか？')) { OV.okLocked = true; return true; }
     redraw(); return false;
   };
   const lockedFail = (e) => { if (e && e.code === 'locked') { if (!ovSec()) OV.d.locked = true; if (m.report) m.report = Object.assign({}, m.report, { locked: true }); redraw(); } };
@@ -1239,30 +1238,49 @@ async function issueMapKey() {
   finally { const b = $('#mkIssue'); if (b) b.disabled = false; }
 }
 // ------------------------------------------------------------
-// 書記: 報告完了（hub入力タブ。2026-10-28〜）。押した月は、監督の画面・個人用URL・区域マップから入力も変更もできない（締切の前でも）
+// 書記: 報告完了（hub入力タブ。2026-10-28〜、夜に改訂）
+//   押した月だけが締め切られる（監督の画面・個人用URL・区域マップから入力も変更もできない）。締切日の10日では締め切らない
+//   押すとその月の数字も記録する（以前の「今すぐ集計して確定」。月次集計シート・名簿の活発／不活発）
+//   押し忘れても、支部への報告の期限（翌月20日）を過ぎた月は締め切る。まだ終わっていない月は押せない
 // ------------------------------------------------------------
 function doneCardHtml(d) {
   const M = Number(d.ym.slice(5)) + '月分';
-  if (d.done) return `<h3>${M}の報告完了</h3><div class="msg ok" style="margin:6px 0">✓ ${M}は報告完了にしました（${esc(doneLabel(d.done.at))}）。<br>監督の画面・個人用URL・区域マップからは、${M}の入力も変更もできません。直すときは「確認事項」→「${esc(ymLabel(d.ym))}分の報告を直す」で、書記として入力します。</div>
+  const hubLabel = deadlineLabel(d.ym, d.hubDay || 20);
+  const fix = `直すときは「確認事項」→「${esc(ymLabel(d.ym))}分の報告を直す」で、書記として入力します。`;
+  if (d.done) return `<h3>${M}の報告完了</h3><div class="msg ok" style="margin:6px 0">✓ ${M}は報告完了にしました（${esc(doneLabel(d.done.at))}）。<br>監督の画面・個人用URL・区域マップからは、${M}の入力も変更もできません。この後に報告や修正があるときは、書記に伝えてもらいます。${fix}</div>
     <button class="btn sm sec" id="doneClear">報告完了を取り消す</button>`;
-  return `<h3>hub への入力が終わったら</h3><p class="muted" style="margin:4px 0">押すと、${M}は監督の画面・個人用URL・区域マップから入力も変更もできなくなります（締切の${d.deadline || 10}日より前でも）。書記は直せます。あとで取り消すこともできます。</p>
+  if (d.ended === false) {
+    const nx = Number(ymAdd(d.ym, 1).slice(5));
+    return `<h3>${M}の報告完了</h3><p class="muted" style="margin:4px 0">${M}はまだ終わっていません。月が終わって hub への入力が済んだら（${nx}月1日から）、ここで「${M} 報告完了」を押せます。</p>`;
+  }
+  if (d.hubClosed) return `<h3>${M}の報告完了</h3><div class="msg warn" style="margin:6px 0">${M}は支部への報告の期限（${hubLabel}）を過ぎたので、監督の画面・個人用URL・区域マップからは入力も変更もできません（「報告完了」を押したときと同じ）。${fix}</div>`;
+  return `<h3>hub への入力が終わったら</h3><p class="muted" style="margin:4px 0">押すと${M}の数字を記録し、監督の画面・個人用URL・区域マップからは${M}の入力も変更もできなくなります（このあとの報告や修正は、書記に伝えてもらい書記が入力）。あとで取り消せます。<br>押すまでは、締切の${d.deadline || 10}日を過ぎても入力できます。押し忘れても、支部への報告の期限の${hubLabel}を過ぎると締め切られます。</p>
     <button class="btn" id="doneSet">${M} 報告完了</button>`;
 }
 function bindDoneCard(d) {
   const M = Number(d.ym.slice(5)) + '月分';
-  const saved = () => { cacheSet('sec:' + d.ym, d); const cur = cacheGet('sec:cur'); if (cur && cur.ym === d.ym) cacheSet('sec:cur', d); const c = $('#doneCard'); if (c) { c.innerHTML = doneCardHtml(d); bindDoneCard(d); } };
+  const keepCache = (x) => { cacheSet('sec:' + x.ym, x); const cur = cacheGet('sec:cur'); if (cur && cur.ym === x.ym) cacheSet('sec:cur', x); };
+  const redrawCard = () => { keepCache(d); const c = $('#doneCard'); if (c) { c.innerHTML = doneCardHtml(d); bindDoneCard(d); } };
   const set = $('#doneSet'), clr = $('#doneClear');
   if (set) set.onclick = async () => {
     const un = (d.unsubmitted || []).length;
-    if (!confirm(`${M}を「報告完了」にします。${un ? `\n（まだ報告していない活発な人が ${un}名います）` : ''}\n\n監督の画面・個人用URL・区域マップからは、${M}の入力も変更もできなくなります（書記は直せます）。\nよろしいですか？`)) return;
-    set.disabled = true;
-    try { const r = await call({ action: 'monthDone', op: 'set', ym: d.ym }); d.done = r.done; saved(); toast(M + 'を報告完了にしました'); }
-    catch (e) { toast(e.message, 'err'); set.disabled = false; }
+    if (!confirm(`${M}を「報告完了」にします。${un ? `\n（まだ報告していない活発な人が ${un}名います）` : ''}\n\n${M}の数字を記録し、監督の画面・個人用URL・区域マップからは${M}の入力も変更もできなくなります（書記は直せます）。\nよろしいですか？`)) return;
+    set.disabled = true; set.textContent = '記録しています…';
+    try {
+      const r = await call({ action: 'monthDone', op: 'set', ym: d.ym });
+      d.done = r.done; d.locked = true;
+      // 活発／不活発の変化などを最新に（集計で名簿が変わるため）。お知らせは描き直したあとに出す（描き直すと消えるため）
+      try { const f = await call({ action: 'secretary', ym: d.ym }); keepCache(f); if (sec && sec.ym === f.ym) drawSecretary(f, false); else redrawCard(); }
+      catch (e2) { redrawCard(); }
+      toast(r.aggError ? M + 'を報告完了にしました（数字の記録はできませんでした。支部への報告の期限の翌日に自動で記録されます）' : M + 'を報告完了にしました' + (r.aggregated ? '（数字も記録しました）' : ''), r.aggError ? 'warn' : 'ok');
+    } catch (e) {
+      toast(e.message, 'err'); set.disabled = false; set.textContent = M + ' 報告完了';
+    }
   };
   if (clr) clr.onclick = async () => {
-    if (!confirm(`${M}の「報告完了」を取り消しますか？\n監督の画面・個人用URL・区域マップから、また入力・変更できるようになります（締切までは）。`)) return;
+    if (!confirm(`${M}の「報告完了」を取り消しますか？\n監督の画面・個人用URL・区域マップから、また入力・変更できるようになります（支部への報告の期限の翌月${d.hubDay || 20}日までは）。`)) return;
     clr.disabled = true;
-    try { await call({ action: 'monthDone', op: 'clear', ym: d.ym }); d.done = null; saved(); toast('報告完了を取り消しました'); }
+    try { const r = await call({ action: 'monthDone', op: 'clear', ym: d.ym }); d.done = null; if (r && r.locked !== undefined) d.locked = r.locked; redrawCard(); toast('報告完了を取り消しました'); }
     catch (e) { toast(e.message, 'err'); clr.disabled = false; }
   };
 }
@@ -1803,7 +1821,6 @@ function drawSecretary(d, stale) {
   <div class="tabs"><button class="on" data-tab="hub">hub入力</button><button data-tab="check">確認事項</button><button data-tab="pioneer">開拓者の確認</button><button data-tab="pdf">巡回訪問PDF</button><button data-tab="setup">初期設定</button></div>
   <div id="tab-hub">
     ${stale ? '<div class="msg warn" id="secStale">前回開いたときの数字を表示しています。最新の数字を確認中…（確認できるまでコピーはできません）</div>' : ''}
-    <div class="msg ${d.storedAt ? 'ok' : 'warn'}">${d.storedAt ? '自動集計済み: ' + esc(d.storedAt) : 'この月はまだ自動集計されていません（下の数字は現時点の暫定値）'}　<button class="btn sm sec" id="agg">今すぐ集計して確定</button></div>
     <div class="sec-grid">
       <div>
         <div class="card"><h3>活発な伝道者全員</h3>${kv('過去6カ月に報告あり', d.hub.activeCount)}</div>
@@ -1820,12 +1837,12 @@ function drawSecretary(d, stale) {
     <div class="card" id="doneCard" style="margin-top:12px">${doneCardHtml(d)}</div>
   </div>
   <div id="tab-check" style="display:none">
-    <div class="card"><h3>締切後の入力・修正（書記）</h3>
-      <p class="muted">締切（翌月${d.deadline || 10}日）を過ぎた月の報告は、本人・監督・区域マップからは出せません・直せません。まだ報告していない人や、直す必要がある人は、書記に伝えてもらいます。<br>
-      下のボタンで監督用の画面を<b>書記として</b>開くと、入力・修正できます（本人が提出した行も直せます）。支部への報告の期限（翌月${d.hubDay || 20}日）までに入れた報告はその月の数字に入り、期限を過ぎてから入れた報告は、次に支部へ送る月の会衆の報告に加えられます。</p>
+    <div class="card"><h3>報告完了の後の入力・修正（書記）</h3>
+      <p class="muted">「報告完了」にした月（押し忘れても、支部への報告の期限の翌月${d.hubDay || 20}日を過ぎた月）の報告は、本人・監督・区域マップからは出せません・直せません。まだ報告していない人や、直す必要がある人は、書記に伝えてもらいます。<br>
+      下のボタンで監督用の画面を<b>書記として</b>開くと、入力・修正できます（本人が提出した行も直せます）。支部への報告の期限（翌月${d.hubDay || 20}日）までに入れた報告はその月の数字に入り（hub も直してください）、期限を過ぎてから入れた報告は、次に支部へ送る月の会衆の報告に加えられます。</p>
       <a class="btn sec" id="fixOpen" href="${esc(location.pathname + '?api=' + encodeURIComponent(API) + '&t=' + encodeURIComponent(TOKEN) + '&mode=overseer&ym=' + d.ym)}" target="_blank" style="text-align:center;text-decoration:none">${ymLabel(d.ym)}分の報告を直す</a></div>
     <div class="card"><h3>未提出（活発な伝道者）: ${d.unsubmitted.length}名</h3><div>${d.unsubmitted.map(u => esc(u.name) + '<span class="pill">' + esc(u.group) + '</span>').join('　') || 'なし'}</div></div>
-    <div class="card"><h3>活発／不活発の変化</h3><div>不活発になった: ${d.changes.toInactive.map(esc).join('・') || 'なし'}</div><div>活発に復帰: ${d.changes.toActive.map(esc).join('・') || 'なし'}</div><div class="muted">「今すぐ集計」でマスタに反映されます</div></div>
+    <div class="card"><h3>活発／不活発の変化</h3><div>不活発になった: ${d.changes.toInactive.map(esc).join('・') || 'なし'}</div><div>活発に復帰: ${d.changes.toActive.map(esc).join('・') || 'なし'}</div><div class="muted">「報告完了」を押すと名簿に反映されます（押し忘れても、支部への報告の期限の翌日に反映）</div></div>
     <div class="card credit"><h3>承認された活動の時間（加算時間の確定）</h3>
       ${d.creditRows.length ? d.creditRows.map(c => `<div class="kv"><div class="k">${esc(c.name)}（${ymLabel(c.ym)}）<br><span class="muted">野外奉仕 ${c.hours}h ／ 承認活動 ${c.actHours}h</span></div>加算 <input type="number" value="${c.credit || ''}" data-id="${c.id}" data-ym="${c.ym}"> h <button class="btn sm sec" data-credit="${c.id}|${c.ym}">確定</button></div>`).join('') : '<div class="muted">該当なし</div>'}
       <div class="muted">確定すると備考に「承認活動 X時間（うち加算 Y時間）」が記録されます。加算時間はS-236の基準で判断してください。報告の数字には含まれません。</div></div>
@@ -1937,14 +1954,6 @@ function drawSecretary(d, stale) {
   $('#mkApiCp').onclick = () => copyText(API, $('#mkApi'), 'URLをコピーしました');
   secShowTab(secTab);
   document.querySelectorAll('.cp').forEach(b => b.onclick = async () => { if (b.disabled) return; try { await navigator.clipboard.writeText(b.dataset.v); b.classList.add('done'); b.textContent = 'コピー済'; } catch (e) { toast('コピーできませんでした', 'err'); } });
-  $('#agg').onclick = async () => {
-    try {
-      await call({ action: 'aggregate', ym: d.ym }); toast('集計を確定しました');
-      const f = await call({ action: 'secretary', ym: d.ym }); cacheSet('sec:' + f.ym, f);
-      const cur = cacheGet('sec:cur'); if (cur && cur.ym === f.ym) cacheSet('sec:cur', f);
-      drawSecretary(f, false);
-    } catch (e) { toast(e.message, 'err'); }
-  };
   bindDoneCard(d);
   document.querySelectorAll('[data-credit]').forEach(b => b.onclick = async () => { const [id, cym] = b.dataset.credit.split('|'); const inp = $(`input[data-id="${id}"][data-ym="${cym}"]`); try { await call({ action: 'setCredit', id, ym: cym, credit: inp.value || 0 }); toast('加算時間を記録しました'); } catch (e) { toast(e.message, 'err'); } });
   initPioneer(d.ym);
