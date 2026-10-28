@@ -1271,7 +1271,9 @@ function bindDoneCard(d) {
 //   反映すると、名簿のグループ・監督、監督の画面の並び（表の順）、URL一覧、S-21 の保存フォルダ（すぐ分け直す）が新しい編成になる
 // ------------------------------------------------------------
 // ROSTER-PARSE-BEGIN
-const ROSTER_MARK_RE = /^[長開援補子伝不監聖奉特宣・･\s]{1,6}$/;
+const ROSTER_MARK_RE = /^[長開援補子伝不監聖奉特宣・･()（）\s]{1,10}$/;   // 長・開・(開)・長(開) などの印（かっこも印の一部）
+const ROSTER_NUM_RE = /^[（(]?\s*\d+\s*(歳|才)?\s*[)）]?$/;                       // 年齢・番号（「(25)」の形も）
+const ROSTER_COUNT_RE = /^[（(]?[長開援補子伝不]?[)）]?\s*\d*\s*名$/;              // 表の下の「(開) 21名」のような人数
 const ROSTER_ROLE_RE = /^(監|監督|補|補佐|助手|副)$/;
 function rosterBands(items, tolK) {
   const sorted = items.slice().sort((a, b) => b.y - a.y || a.x - b.x);
@@ -1289,7 +1291,7 @@ function rosterAsOf(texts, fileName) {
   const t = texts.join(' ').normalize('NFKC');
   let m = t.match(/(\d{4})\s*[\/年.\-]\s*(\d{1,2})\s*[\/月.\-]\s*(\d{1,2})\s*日?\s*[〜~～\-－]/) || t.match(/(\d{4})\s*[\/年.\-]\s*(\d{1,2})\s*[\/月.\-]\s*(\d{1,2})/);
   if (m) return m[1] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[3]).slice(-2);
-  m = t.match(/(\d{4})\s*年\s*(\d{1,2})\s*月/);
+  m = t.match(/(\d{4})\s*[\/年.]\s*(\d{1,2})\s*月/);   // 「2026/ 8月〜」「2026年8月〜」
   if (m) return m[1] + '-' + ('0' + m[2]).slice(-2) + '-01';
   m = String(fileName || '').match(/(20\d{2})(\d{2})(\d{2})?(?!\d)/);
   if (m && Number(m[2]) >= 1 && Number(m[2]) <= 12) return m[1] + '-' + m[2] + '-' + (m[3] || '01');
@@ -1350,19 +1352,30 @@ function parseRosterItems(pages, fileName) {
     for (let ci = 0; ci < n; ci++) {
       const g = groups.find(x => x.label === cols[ci].label);
       const mine = body.filter(it => colOf(it) === ci);
-      const markLike = (it) => ROSTER_MARK_RE.test(it.s) && it.s.replace(/[・･\s]/g, '').length <= 3;
-      const nh = mine.filter(it => !markLike(it) && !/^\d/.test(it.s)).map(it => it.h).sort((a, b) => a - b);
+      const core = (s) => s.replace(/[・･()（）\s]/g, '');
+      const markLike = (it) => ROSTER_MARK_RE.test(it.s) && core(it.s).length <= 4;
+      const nh = mine.filter(it => !markLike(it) && !ROSTER_NUM_RE.test(it.s)).map(it => it.h).sort((a, b) => a - b);
       const nameH = nh.length ? nh[Math.floor(nh.length / 2)] : 0;   // この列の名前の文字の大きさ（印は小さい）
       rosterBands(mine, 0.45).forEach(row => {
         const names = [], marks = [];
-        const rest = row.items.filter(it => !/^\d+\s*(歳|才)?$/.test(it.s));      // 年齢・番号は除く
+        // 表の下の人数の行（「(開) 21名 (長)7名」）は読まない
+        const joined = row.items.map(it => it.s).join('').replace(/\s/g, '');
+        if (/\d\s*名/.test(joined) && !joined.replace(/[（(][^）)]*[)）]|[()（）]|\d+|名|[長開援補子伝不]/g, '')) return;
+        const rest = row.items.filter(it => !ROSTER_NUM_RE.test(it.s) && !ROSTER_COUNT_RE.test(it.s.trim()));      // 年齢・番号・人数は除く
         // 長・開 などの印。ただし行が印のような文字だけで、名前と同じ大きさの2文字以上なら、いちばん右を名前とする（「正子」のような短い名前）
         const nameItems = rest.filter(it => !markLike(it));
         const last = rest[rest.length - 1];
-        if (!nameItems.length && last && last.s.replace(/[・･\s]/g, '').length >= 2 && (!nameH || last.h >= nameH * 0.92)) nameItems.push(last);
-        rest.forEach(it => { if (nameItems.indexOf(it) >= 0) names.push(it.s.replace(/\s*\d+\s*(歳|才)?$/, '')); else marks.push(it.s.replace(/\s+/g, '')); });
+        if (!nameItems.length && last && core(last.s).length >= 2 && (!nameH || last.h >= nameH * 0.92)) nameItems.push(last);
+        rest.forEach(it => {
+          if (nameItems.indexOf(it) < 0) { if (core(it.s)) marks.push(core(it.s)); return; }
+          // 名前の前後に付いた印・年齢（「(開)浅野七海(25)」「親川 愛子（72)」）は名前に入れない
+          let t = it.s.replace(/\s*[（(]\s*\d+\s*(歳|才)?\s*[)）]?\s*$/, '').replace(/\s+\d+\s*(歳|才)?$/, '').replace(/\s*[（(]\s*$/, '');
+          const pm = t.match(/^((?:[長援補子伝不監]?[（(][長開援補子伝不][)）])+)\s*/);
+          if (pm) { marks.push(core(pm[1])); t = t.slice(pm[0].length); }
+          if (t.trim()) names.push(t);
+        });
         const label = names.join(' ').replace(/\s+/g, ' ').trim();
-        if (!label) return;
+        if (!label || /^[名\s]+$/.test(label)) return;   // 表の下の人数の行
         const role = roleItems.find(r => Math.abs(r.y - row.y) <= Math.max(3, row.h * 0.5));
         const kind = role ? (/^(補|補佐|助手|副)$/.test(role.s) ? 'assistant' : 'leader') : '';
         if (kind === 'leader' && !g.leader) g.leader = label;
@@ -1474,7 +1487,7 @@ function grSetPreview(r) {
   drawGroupPreview();
   const out = $('#grOut'); if (out) out.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
-const GR_HOW = { exact: '', variant: '表記ちがい', family: '名字の省略', cut: '途中で切れた名前', similar: '1字ちがい', ambiguous: '同じような名前が複数', dup: '表に2回', missing: '表にない' };
+const GR_HOW = { exact: '', variant: '表記ちがい', family: '名字の省略', cut: '途中で切れた名前', similar: '1字ちがい', ambiguous: '同じような名前が複数', dup: '表に2回', missing: '表にない', alias: '前に書記がつないだ名前', linked: 'いまつないだ名前' };
 const GR_CHECK = { similar: 1, cut: 1, ambiguous: 1, dup: 1 };
 function grGroupOptions(sel) {
   return grP.groups.map((g, i) => `<option value="${i}" ${i === sel ? 'selected' : ''}>${esc(g.name || '（名前なし）')}</option>`).join('') + `<option value="-1" ${sel === -1 ? 'selected' : ''}>（グループなし）</option>`;
@@ -1513,11 +1526,18 @@ function drawGroupPreview() {
   if (check.length || missing.length || extra.length) {
     h += `<div class="grbox need"><b>確かめてください</b><div class="muted" style="margin:2px 0 4px">グループを選び直せます。名簿にいない名前は、名簿の人を選ぶとその人をそのグループにします（子どもなど名簿にいない人は「反映しない」のままで構いません）。</div>
       ${check.map(id => grPersonRow(id)).join('')}
-      ${missing.map(id => grPersonRow(id, (P.info[id].cur && P.assign[id] < 0 ? 'いまのグループは表にありません' : 'いまのグループのまま'))).join('')}
-      ${extra.map(x => { const i = P.extra.indexOf(x); const cands = (x.cands || []).filter(id => P.people[id]); const rest = ids.filter(id => cands.indexOf(id) < 0).sort((a, b) => String(P.people[a].name).localeCompare(String(P.people[b].name), 'ja'));
+      ${missing.map(id => grPersonRow(id, (P.info[id].cur && P.assign[id] < 0 ? 'いまのグループが表にないので「グループなし」' : 'いまのグループのまま') + '（名簿・S-21 は消えません）')).join('')}
+      ${extra.map(x => { const i = P.extra.indexOf(x); const cands = (x.cands || []).filter(id => P.people[id]);
+        const byName = (a, b) => String(P.people[a].name).localeCompare(String(P.people[b].name), 'ja');
+        const notYet = ids.filter(id => cands.indexOf(id) < 0 && P.info[id].how === 'missing').sort(byName);     // 表のどの名前とも一致していない名簿の人
+        const others = ids.filter(id => cands.indexOf(id) < 0 && P.info[id].how !== 'missing').sort(byName);    // 表のほかの名前と一致済み（選ぶとこちらに移る）
+        const o = (id) => `<option value="${esc(id)}">${esc(P.people[id].name)}（${esc(P.info[id].cur || 'グループなし')}）</option>`;
         return `<div class="grp-r"><div class="t"><span>表「${esc(x.label)}」</span><small>${esc(P.groups[x.gi] ? P.groups[x.gi].name : x.group)}・名簿にいない名前${x.how === 'dup' ? '（表に2回）' : x.how === 'ambiguous' ? '（同じような名前が複数）' : ''}</small></div>
-          <select data-extra="${i}" aria-label="表の${esc(x.label)}は名簿のだれか"><option value="">反映しない</option>${cands.length ? '<optgroup label="候補">' + cands.map(id => `<option value="${esc(id)}">${esc(P.people[id].name)}（${esc(P.info[id].cur || 'グループなし')}）</option>`).join('') + '</optgroup>' : ''}<optgroup label="名簿の人">${rest.map(id => `<option value="${esc(id)}">${esc(P.people[id].name)}</option>`).join('')}</optgroup></select></div>`; }).join('')}</div>`;
+          <select data-extra="${i}" aria-label="表の${esc(x.label)}は名簿のだれか"><option value="">反映しない</option>${cands.length ? '<optgroup label="候補">' + cands.map(o).join('') + '</optgroup>' : ''}${notYet.length ? '<optgroup label="表にない名簿の人">' + notYet.map(o).join('') + '</optgroup>' : ''}<optgroup label="ほかの名簿の人（表のほかの名前と一致済み）">${others.map(o).join('')}</optgroup></select></div>`; }).join('')}</div>`;
   }
+  const links = P.extra.map((x, i) => ({ x, i })).filter(o => o.x.pick);
+  if (links.length) h += `<div class="grbox"><b>表の名前と名簿の人をつないだもの（${links.length}件）</b><div class="muted" style="margin:2px 0 4px">反映すると覚えておき、次にグループ表を読み込んだときは自動で一致します。</div>
+    ${links.map(({ x, i }) => `<div class="grp-r"><div class="t"><span>表「${esc(x.label)}」→ ${esc(P.people[x.pick] ? P.people[x.pick].name : '')}</span><small>${esc(P.groups[x.gi] ? P.groups[x.gi].name : x.group)}</small></div><button class="btn sm sec" data-unlink="${i}" style="margin:0">取り消す</button></div>`).join('')}</div>`;
   h += `<div class="grbox"><b>グループが変わる人（${moved.length}人）</b>${moved.length ? moved.map(id => grPersonRow(id)).join('') : '<div class="muted" style="margin-top:4px">いません</div>'}</div>`;
   h += `<div style="margin-top:12px;font-size:14px;font-weight:bold;color:var(--navy)">グループごと（表の順）</div>`;
   P.groups.forEach((g, i) => {
@@ -1531,16 +1551,27 @@ function drawGroupPreview() {
   if (none.length) h += `<details class="grg" data-gi="-1" ${P.open[-1] ? 'open' : ''}><summary>（グループなし） <small>${none.length}人</small></summary>${none.map(id => grPersonRow(id)).join('')}</details>`;
   h += `<button class="btn sm sec" id="grAdd">グループを追加</button>
     <button class="btn" id="grApply">この内容で反映する</button><button class="btn sec" id="grCancel">やめる</button>
-    <div class="muted" style="margin-top:6px">反映すると: 名簿のグループと監督の印（監督・補佐）を書き換え、監督の画面のグループと人の並びを表の順に、URL一覧を作り直し、S-21 の保存フォルダをグループごとに分け直します（数分。この画面を閉じても続きます）。反映のあとでも、直前の反映は元に戻せます。</div>`;
+    <div class="muted" style="margin-top:6px">反映すると: 名簿のグループと監督の印（監督・補佐）を書き換え、監督の画面のグループと人の並びを表の順に、URL一覧を作り直し、S-21 の保存フォルダをグループごとに分け直します（数分。この画面を閉じても続きます）。反映のあとでも、直前の反映は元に戻せます。<br>
+    <b>名簿の人を消すことはありません。</b>表から抜けている人も名簿に残り、報告と S-21 はそのままです（変わるのはグループだけ）。人数は名簿の人で数えています（子どもなど名簿にいない人は数えません）。</div>`;
   out.innerHTML = h;
   out.querySelectorAll('select[data-grp]').forEach(s => s.onchange = () => { P.assign[s.dataset.grp] = Number(s.value); drawGroupPreview(); });
-  out.querySelectorAll('select[data-extra]').forEach(s => s.onchange = () => {
-    const x = P.extra[Number(s.dataset.extra)];
-    if (!s.value) return;
-    x.pick = s.value;
-    if (x.gi >= 0) { P.assign[s.value] = x.gi; P.groups[x.gi].order.push(s.value); }
-    P.info[s.value] = Object.assign({}, P.info[s.value], { how: 'exact', label: x.label });
-    drawGroupPreview(); toast(P.people[s.value].name + 'さんを ' + (P.groups[x.gi] ? P.groups[x.gi].name : '') + ' にしました');
+  // 表の名前 → 名簿の人を選ぶ（change と input のどちらで来ても1回だけ）。取り消せるように前の状態を持っておく
+  const pickExtra = (s) => {
+    const x = P.extra[Number(s.dataset.extra)], id = s.value;
+    if (!x || !id || x.pick === id) return;
+    x.pick = id;
+    x.prev = { assign: P.assign[id], info: P.info[id], order: x.gi >= 0 ? P.groups[x.gi].order.slice() : null };
+    if (x.gi >= 0) { P.assign[id] = x.gi; if (P.groups[x.gi].order.indexOf(id) < 0) P.groups[x.gi].order.push(id); }
+    P.info[id] = Object.assign({}, P.info[id], { how: 'linked', label: x.label });
+    drawGroupPreview(); toast('表「' + x.label + '」を ' + P.people[id].name + 'さんにつなぎました' + (P.groups[x.gi] ? '（' + P.groups[x.gi].name + '）' : ''));
+  };
+  out.querySelectorAll('select[data-extra]').forEach(s => { s.onchange = () => pickExtra(s); s.oninput = () => pickExtra(s); });
+  out.querySelectorAll('[data-unlink]').forEach(b => b.onclick = () => {
+    const x = P.extra[Number(b.dataset.unlink)]; if (!x || !x.pick) return;
+    const id = x.pick, pv = x.prev || {};
+    P.assign[id] = pv.assign; P.info[id] = pv.info; if (pv.order && x.gi >= 0) P.groups[x.gi].order = pv.order;
+    x.pick = ''; x.prev = null;
+    drawGroupPreview();
   });
   out.querySelectorAll('input[data-gname]').forEach(inp => inp.onchange = () => { P.groups[Number(inp.dataset.gname)].name = inp.value.trim(); drawGroupPreview(); });
   out.querySelectorAll('select[data-lead]').forEach(s => s.onchange = () => { P.groups[Number(s.dataset.lead)].leader = s.value; drawGroupPreview(); });
@@ -1563,13 +1594,15 @@ async function applyGroupRoster() {
   const moved = ids.filter(id => (P.assign[id] >= 0 ? P.groups[P.assign[id]].name : '') !== (P.info[id].cur || '')).length;
   const noLead = P.groups.filter((g, i) => used[i] && !g.leader).map(g => g.name);
   const pending = P.extra.filter(x => x.pick === '').length;
-  if (!confirm(`グループ ${names.length}つ・グループが変わる人 ${moved}人で反映します。${noLead.length ? '\n監督が決まっていないグループ: ' + noLead.join('・') : ''}${pending ? '\n名簿にいない名前 ' + pending + '件は反映しません。' : ''}\n\n監督の画面・URL一覧・S-21 の保存フォルダが新しい編成になります。よろしいですか？`)) return;
+  const miss = P.mode === 'table' ? ids.filter(id => P.info[id].how === 'missing') : [];
+  if (!confirm(`グループ ${names.length}つ・グループが変わる人 ${moved}人で反映します。${noLead.length ? '\n監督が決まっていないグループ: ' + noLead.join('・') : ''}${pending ? '\n名簿にいない名前 ' + pending + '件は反映しません。' : ''}${miss.length ? '\n表にない人 ' + miss.length + '人（' + miss.map(id => P.people[id].name).join('・') + '）は名簿に残し、グループは確認画面のとおりにします（S-21・報告は消えません）。' : ''}\n\n監督の画面・URL一覧・S-21 の保存フォルダが新しい編成になります。よろしいですか？`)) return;
   const groups = P.groups.map((g, i) => ({ g, i })).filter(x => used[x.i]).map(({ g }) => ({ name: g.name, leader: g.leader, assistant: g.assistant }));
   const assign = {}; ids.forEach(id => { assign[id] = P.assign[id] >= 0 ? P.groups[P.assign[id]].name : ''; });
   const order = {}; P.groups.forEach((g, i) => { if (used[i]) order[g.name] = g.order.filter(id => P.assign[id] === i); });
   const b = $('#grApply'); b.disabled = true; b.textContent = '反映しています…';
   try {
-    const r = await call({ action: 'groupRoster', op: 'apply', groups, assign, order, asOf: P.asOf, file: P.mode === 'current' ? '' : P.file, mode: P.mode });
+    const aliases = P.extra.filter(x => x.pick).map(x => ({ label: x.label, id: x.pick }));   // 次の読み込みから自動で一致させる
+    const r = await call({ action: 'groupRoster', op: 'apply', groups, assign, order, aliases, asOf: P.asOf, file: P.mode === 'current' ? '' : P.file, mode: P.mode });
     grInfo = r; grP = null; drawGroupStatus(); drawGroupPreview();
     toast(`反映しました（グループ・監督が変わった人 ${r.changed}人）。` + (r.backup && r.backup.started ? 'S-21 の保存フォルダの分け直しを始めました。' : ''));
   } catch (e) { toast(e.message, 'err'); b.disabled = false; b.textContent = 'この内容で反映する'; }
