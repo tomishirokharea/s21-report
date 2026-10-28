@@ -263,6 +263,7 @@
   /* 監督画面: 行ごとの保存の状態（保存中…／✓保存／⚠未保存） */
   .mem .sv { font-size:11px; margin-left:4px; white-space:nowrap; } .sv.wait { color:var(--gray); } .sv.ok { color:var(--ok); } .sv.err { color:var(--err); font-weight:bold; }
   .mem { transition:background .3s; }
+  .mem.fresh { background:#fff6d6; }   /* ほかの人の入力を取り込んだ行（少しのあいだ色を付ける） */
   /* 監督用のパスワード（画面全体に重ねる） */
   #ovLogin { position:fixed; inset:0; z-index:30; background:rgba(27,58,99,.55); display:flex; align-items:flex-start; justify-content:center; padding:60px 16px 16px; overflow:auto; }
   #ovLogin .card { width:100%; max-width:380px; text-align:center; }
@@ -315,7 +316,7 @@ async function call(payload, opt) {
         let j;
         try { j = await res.json(); }
         catch (e) { throw Object.assign(new Error('サーバーの応答を読み取れませんでした。少し待ってからもう一度お試しください。'), { net: true, retry: true }); }
-        if (!j.ok) throw Object.assign(new Error(j.error || 'エラー'), { server: true, code: j.code, retry: j.code === 'busy' });
+        if (!j.ok) throw Object.assign(new Error(j.error || 'エラー'), { server: true, code: j.code, retry: j.code === 'busy', data: j });
         return j;
       } catch (e) {
         if (!e.retry || i >= tries - 1) throw e;
@@ -598,7 +599,7 @@ function drawOverseer(d, stale) {
   app.classList.toggle('is-stale', !!stale);
   // 入力する人は選ばない（共通URLは監督として記録。監督個人のURLは本人、書記のURLは書記）
   const byId = d.secretary ? '' : d.me ? d.me.id : '';
-  OV = { d, ym: d.ym, byId, okLocked: false };
+  OV = { d, ym: d.ym, byId, okLocked: false, loadedAt: Date.now() };
   // 報告完了・支部への報告の期限の後の月の注意（監督: 入力も変更もできない／書記: 入力・修正できる）
   const hubLabel = deadlineLabel(d.ym, d.hubDay || 20);
   const doneAt = d.done && d.done.at ? '（' + doneLabel(d.done.at) + '）' : '';
@@ -810,9 +811,61 @@ function memberRow(m) {
     ${m.pioneer && r.actHours ? `<div class="act">本人の報告：承認された活動 ${r.actHours}時間</div>` : ''}
   </div>`;
 }
+// ------------------------------------------------------------
+// ほかの人の入力を取り込む（2026-10-28〜）: 画面に戻ったとき・2分ごとに、いまの月の一覧を読み直して、
+// 中身（版 v）が変わった行だけを描き直す。入力中（カーソルがある）・保存待ちの行は触らない（次の機会に）。
+// 書記が「報告完了」にしたなど、月の状態が変わったときは、保存待ちがなければ画面全体を描き直す
+// ------------------------------------------------------------
+let ovRefreshing = false;
+async function ovRefresh(force) {
+  if (MODE !== 'overseer' || !OV || ovRefreshing || document.hidden || ovView !== 'input' || !$('#groups') || $('#ovLogin')) return;
+  if (!force && Date.now() - (OV.loadedAt || 0) < 60000) return;
+  ovRefreshing = true;
+  const cur = OV;
+  try {
+    const d = await call({ action: 'overseer', ym: cur.ym }, { quiet: true });
+    if (OV !== cur || d.ym !== cur.ym) return;
+    ovMerge(d);
+  } catch (e) { if (e.code === 'pass') ovNeedPass(e, () => ovRefresh(true)); }   // 通信の失敗は、次の機会にもう一度
+  finally { ovRefreshing = false; }
+}
+function ovRowBusy(id) {
+  const el = $('#m-' + id); if (!el) return true;
+  if (el.contains(document.activeElement)) return true;
+  for (const k of SQ.jobs.keys()) if (k.split('|')[1] === String(id)) return true;
+  return !!(SQ.cur && SQ.cur.split('|')[1] === String(id));
+}
+function ovMerge(d) {
+  const quiet = !SQ.jobs.size && !SQ.running && !($('#groups') && $('#groups').contains(document.activeElement));
+  if (!!d.locked !== !!OV.d.locked || !!d.done !== !!OV.d.done) {
+    if (!quiet) return;   // 保存待ち・入力中なら、次の機会に
+    const was = OV.d.locked;
+    drawOverseer(d, false); cacheSet('ov:' + d.ym, d);
+    if (!was && d.locked) toast(d.done ? ymLabel(d.ym) + '分は、書記が「報告完了」にしました。ここからは入力できません' : ymLabel(d.ym) + '分は締め切られました', 'warn');
+    return;
+  }
+  const fresh = {}; d.groups.forEach(g => g.members.forEach(m => { fresh[m.id] = m; }));
+  const touched = new Set(); let n = 0;
+  OV.d.groups.forEach((g, gi) => g.members.forEach(m => {
+    const x = fresh[m.id]; if (!x) return;   // 名簿に加わった人などは、開き直したときに出る
+    if ((m.report ? m.report.v || '' : '') === (x.report ? x.report.v || '' : '')) return;
+    if (ovRowBusy(m.id)) return;
+    m.report = x.report; m.active = x.active; m.monthsWithout = x.monthsWithout;
+    const el = $('#m-' + m.id); if (el._kill) el._kill();
+    el.outerHTML = memberRow(m); bindMember(m, gi);
+    const nel = $('#m-' + m.id); if (nel) { nel.classList.add('fresh'); setTimeout(() => nel.classList.remove('fresh'), 2500); }
+    touched.add(gi); n++;
+  }));
+  touched.forEach(gi => updateGroupCounts(gi));
+  OV.loadedAt = Date.now();
+  if (n) cacheOverseer();
+  return n;
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) ovRefresh(); });
+setInterval(() => ovRefresh(), 120000);
 // 監督画面の保存は、画面を止めずに裏で順番に送る。
 // 同じ行を続けて変えたとき（チェック→レッスン数→備考 など）は、最後の内容を1回だけ送る。
-const SQ = { jobs: new Map(), running: null, timer: null, failed: new Set() };
+const SQ = { jobs: new Map(), running: null, timer: null, failed: new Set(), cur: null };
 function saveMark(el, s) {
   const sv = $('.sv', el); if (!sv) return;
   clearTimeout(sv._t);
@@ -830,6 +883,7 @@ function runSaves() {
   SQ.running = (async () => {
     while (SQ.jobs.size) {
       const [key, job] = SQ.jobs.entries().next().value; SQ.jobs.delete(key);
+      SQ.cur = key;
       try {
         await job.run(key);
         SQ.failed.delete(key);
@@ -844,7 +898,7 @@ function runSaves() {
         toast((job.el.querySelector('.nm') ? job.el.querySelector('.nm').firstChild.textContent + '：' : '') + e.message, 'err');
       }
     }
-  })().finally(() => { SQ.running = null; });
+  })().finally(() => { SQ.running = null; SQ.cur = null; });
   return SQ.running;
 }
 async function flushSaves() { clearTimeout(SQ.timer); while (SQ.jobs.size || SQ.running) await runSaves(); }
@@ -858,6 +912,7 @@ function bindMember(m, gi) {
   // 行を元の内容で描き直す（書記が確認で「キャンセル」したとき・締め切られた月で断られたとき）。
   // 描き直しを始めたら、古い入力欄のイベント（取り外すときの blur→change など）は無視する
   let dead = false;
+  el._kill = () => { dead = true; };   // ほかの人の入力を取り込んで行を描き直すとき（ovMerge）、この行のイベントを止める
   const redraw = () => { if (dead) return; dead = true; setTimeout(() => { const cur = $('#m-' + m.id); if (!cur) return; cur.outerHTML = memberRow(m); bindMember(m, gi); }, 0); };
   // 書記が締め切られた月の報告を直すときは、その画面で最初の1回だけ確かめる
   const secOk = () => {
@@ -866,6 +921,19 @@ function bindMember(m, gi) {
     redraw(); return false;
   };
   const lockedFail = (e) => { if (e && e.code === 'locked') { if (!ovSec()) OV.d.locked = true; if (m.report) m.report = Object.assign({}, m.report, { locked: true }); redraw(); } };
+  // 画面を開いたあとに、ほかの人（ほかの監督・本人・書記）が先に入力・変更・削除していた（code:'conflict'）:
+  // 上書きせず、サーバーの最新の内容でこの行を描き直してお知らせする。この行の送る予定は捨てる。ほかの行も最新にする
+  const conflictFail = (e) => {
+    if (!e || e.code !== 'conflict') return false;
+    m.report = (e.data && e.data.report) || null;
+    ['s|', 'c|'].forEach(k => SQ.jobs.delete(k + m.id + '|' + ym));
+    redraw(); updateGroupCounts(gi); cacheOverseer();
+    toast(e.message, 'warn');
+    setTimeout(() => ovRefresh(true), 300);
+    return true;
+  };
+  // 保存のときに送る「開いたときの版」（報告がなければ ''。版のない古い記録なら送らない＝比べない）
+  const withBase = (payload) => { if (!m.report) payload.base = ''; else if (m.report.v) payload.base = m.report.v; return payload; };
   const after = (report) => {
     m.report = report || null; el.classList.toggle('has', !!report); $('.st', el).innerHTML = rowStatus(m);   // 行を全部空にしたときは report なし＝未提出に戻る
     const w = $('.pill.soon', el); if (w) w.remove();
@@ -886,9 +954,11 @@ function bindMember(m, gi) {
     if (!collect()) return;
     if (!secOk()) return;
     queueSave('s|' + m.id + '|' + ym, async (key) => {
+      if (dead) return;
       const payload = collect(); if (!payload) return;
+      withBase(payload);
       let res;
-      try { res = await call(payload, { quiet: true, retry: true }); } catch (e) { lockedFail(e); throw e; }
+      try { res = await call(payload, { quiet: true, retry: true }); } catch (e) { if (conflictFail(e)) return; lockedFail(e); throw e; }
       if (f('credit') && !SQ.jobs.has(key)) f('credit').value = (res.report && res.report.credit) || '';   // 続けて入力していたら上書きしない
       after(res.report); capMsg(res);
     }, el);
@@ -904,10 +974,11 @@ function bindMember(m, gi) {
     if (dead || lock) return;
     if (!own) return save();
     queueSave('c|' + m.id + '|' + ym, async (key) => {
+      if (dead) return;
       let res;
-      try { res = await call({ action: 'overseerCredit', by: OV.byId, id: m.id, ym, credit: f('credit').value || 0 }, { quiet: true, retry: true }); } catch (e) { lockedFail(e); throw e; }
+      try { res = await call(withBase({ action: 'overseerCredit', by: OV.byId, id: m.id, ym, credit: f('credit').value || 0 }), { quiet: true, retry: true }); } catch (e) { if (conflictFail(e)) return; lockedFail(e); throw e; }
       if (!SQ.jobs.has(key)) f('credit').value = res.credit || '';
-      m.report.credit = res.credit; m.report.remarks = res.remarks;
+      if (res.report) m.report = res.report; else { m.report.credit = res.credit; m.report.remarks = res.remarks; }
       flash(); capMsg(res); cacheOverseer();
     }, el);
   };
