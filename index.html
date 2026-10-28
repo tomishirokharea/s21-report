@@ -68,6 +68,35 @@
   table.gsum tr.g { cursor:pointer; }
   table.gsum .ovs { font-size:11px; color:var(--gray); }
   .unsub { color:var(--err); font-weight:bold; } .alldone { color:var(--ok); font-weight:bold; }
+  /* 月のダイヤル（指で上下に回して選ぶ。まん中の月が選ばれる） */
+  .dial { position:relative; height:120px; border:1px solid var(--line); border-radius:10px; background:#fff; overflow:hidden; outline:none; }
+  .dial:focus-visible { box-shadow:0 0 0 2px var(--blue); }
+  .dial-sc { height:100%; overflow-y:scroll; scroll-snap-type:y mandatory; scrollbar-width:none; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; }
+  .dial-sc::-webkit-scrollbar { display:none; }
+  .dial-pad { height:40px; }
+  .dial-it { height:40px; line-height:40px; text-align:center; scroll-snap-align:center; font-size:15px; color:#9aa5b5; cursor:pointer; user-select:none; white-space:nowrap; transition:color .12s, font-size .12s; }
+  .dial-it.on { color:var(--navy); font-weight:bold; font-size:19px; }
+  .dial::before { content:""; position:absolute; left:6px; right:6px; top:40px; height:40px; border-radius:8px; background:rgba(47,93,155,.08); border:1px solid rgba(47,93,155,.25); pointer-events:none; }
+  .dial::after { content:""; position:absolute; inset:0; pointer-events:none; background:linear-gradient(#fff, rgba(255,255,255,0) 32%, rgba(255,255,255,0) 68%, #fff); }
+  /* 書記: グループ編成の変更 */
+  .grt { width:100%; border-collapse:collapse; font-size:13px; margin:6px 0; }
+  .grt td, .grt th { border-bottom:1px solid var(--line); padding:5px 4px; text-align:left; }
+  .grt th { font-size:11px; color:var(--gray); font-weight:normal; }
+  .grt td.n { text-align:right; white-space:nowrap; }
+  .grbox { border:1px solid var(--line); border-radius:8px; padding:8px 10px; margin-top:10px; }
+  .grbox > b { font-size:14px; color:var(--navy); }
+  .grbox.need { border-color:#e8c27a; background:#fffaf0; }
+  .grp-r { display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid #eef1f5; font-size:14px; flex-wrap:wrap; }
+  .grp-r:last-child { border-bottom:none; }
+  .grp-r .t { flex:1 1 150px; min-width:0; line-height:1.35; }
+  .grp-r .t small { display:block; color:var(--gray); font-size:12px; }
+  .grp-r select { flex:0 0 auto; width:auto; max-width:170px; font-size:14px; padding:5px 6px; }
+  .grp-r.moved .t > span:first-child { font-weight:bold; }
+  details.grg { border:1px solid var(--line); border-radius:8px; margin-top:8px; padding:0 10px; }
+  details.grg > summary { padding:9px 0; font-size:14px; }
+  details.grg > summary small { font-weight:normal; color:var(--gray); }
+  .grg .gl { display:grid; grid-template-columns:52px 1fr; gap:6px 8px; align-items:center; font-size:13px; margin:2px 0 8px; }
+  .grg .gl select, .grg .gl input { font-size:14px; padding:5px 6px; }
   details.grp { padding:0; overflow:hidden; }
   details.grp > summary { list-style:none; padding:12px 14px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
   details.grp > summary::-webkit-details-marker { display:none; }
@@ -367,11 +396,50 @@ async function renderPersonal(ym) {
 }
 // 締切日の表示（ym の翌月の締切日）。例: 2026-09 → 10月10日
 function deadlineLabel(ym, day) { return Number(ymAdd(ym, 1).slice(5)) + '月' + (day || 10) + '日'; }
+// 報告完了の日時 '2026-10-28 21:05:00' → '10/28 21:05'
+function doneLabel(at) { const m = String(at || '').match(/^\d{4}-(\d{2})-(\d{2}) (\d{2}:\d{2})/); return m ? Number(m[1]) + '/' + Number(m[2]) + ' ' + m[3] : String(at || ''); }
+// ------------------------------------------------------------
+// 月のダイヤル（2026-10-28〜 監督の画面）: 上下に回して、まん中に来た月を選ぶ。タップ・↑↓キーでも選べる
+// ------------------------------------------------------------
+const DIAL_H = 40;   // 1行の高さ（CSS の .dial-it と同じ）
+function ovMonthList(sel) {
+  const t = new Date(), cur = t.getFullYear() + '-' + ('0' + (t.getMonth() + 1)).slice(-2);
+  const out = []; for (let i = -6; i <= 1; i++) out.push(ymAdd(cur, i));
+  if (sel && out.indexOf(sel) < 0) { out.push(sel); out.sort(); }
+  return out;
+}
+function monthDialHtml(id, list, sel) {
+  return `<div class="dial" id="${id}" role="listbox" aria-label="月" tabindex="0"><div class="dial-sc"><div class="dial-pad"></div>${list.map(y => `<div class="dial-it${y === sel ? ' on' : ''}" role="option" data-v="${y}" aria-selected="${y === sel}">${ymLabel(y)}</div>`).join('')}<div class="dial-pad"></div></div></div>`;
+}
+function bindMonthDial(el, onPick) {
+  if (!el) return;
+  const sc = el.querySelector('.dial-sc'), its = [...el.querySelectorAll('.dial-it')];
+  if (!its.length) return;
+  let cur = Math.max(0, its.findIndex(x => x.classList.contains('on'))), timer = null, quiet = true;
+  const at = () => Math.max(0, Math.min(its.length - 1, Math.round(sc.scrollTop / DIAL_H)));
+  const mark = (i) => its.forEach((x, j) => { x.classList.toggle('on', j === i); x.setAttribute('aria-selected', j === i); });
+  const go = (i, smooth) => { try { sc.scrollTo({ top: i * DIAL_H, behavior: smooth ? 'smooth' : 'auto' }); } catch (e) { sc.scrollTop = i * DIAL_H; } };
+  el._sync = () => { quiet = true; go(cur, false); mark(cur); setTimeout(() => { quiet = false; }, 60); };
+  el._sync();
+  sc.addEventListener('scroll', () => {
+    if (quiet) return;
+    mark(at());
+    clearTimeout(timer);
+    timer = setTimeout(() => { const i = at(); mark(i); if (i !== cur) { cur = i; onPick(its[i].dataset.v); } }, 250);   // 回し終わって止まったら
+  }, { passive: true });
+  its.forEach((x, i) => { x.onclick = () => go(i, true); });
+  el.onkeydown = (e) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    e.preventDefault(); go(Math.max(0, Math.min(its.length - 1, at() + (e.key === 'ArrowDown' ? 1 : -1))), true);
+  };
+}
 // 締切（翌月10日）を過ぎた月は、本人・監督からは出せない・直せない（書記に伝えてもらい、書記が入力する。2026-10-28〜）
 function personalSubnote(r, d) {
-  if (!r.submitted) return d && d.locked ? `<div class="msg warn">締切（${deadlineLabel(d.ym, d.deadline)}）を過ぎたため、${ymLabel(d.ym)}分の報告はここからは送れません。<br><b>まだ報告していないときは、書記に伝えてください</b>（書記が入力します）。</div>` : '';
+  // 書記が「報告完了」にした月（締切の前でも送れない・変えられない。2026-10-28〜）
+  const why = d && d.done ? '書記が「報告完了」にした' : '締切' + (d ? '（' + deadlineLabel(d.ym, d.deadline) + '）' : '') + 'を過ぎた';
+  if (!r.submitted) return d && d.locked ? `<div class="msg warn">${why}ため、${ymLabel(d.ym)}分の報告はここからは送れません。<br><b>まだ報告していないときは、書記に伝えてください</b>（書記が入力します）。</div>` : '';
   const who = r.source === 'overseer' ? '監督入力' : r.source === 'import' ? '取込' : r.source === 'map' ? '区域マップ' : '本人';
-  if (r.locked || (d && d.locked)) return `<div class="msg warn">提出済み: ${esc(r.submitted)}（${who}）<br>締切を過ぎたため、この月の報告は変更できません。直す必要があるときは、書記に伝えてください（書記が直します）。</div>`;
+  if (r.locked || (d && d.locked)) return `<div class="msg warn">提出済み: ${esc(r.submitted)}（${who}）<br>${why}ため、この月の報告は変更できません。直す必要があるときは、書記に伝えてください（書記が直します）。</div>`;
   return `<div class="muted" style="margin-top:8px">提出済み: ${esc(r.submitted)}（${who}）。送信すると上書きされます。</div>`;
 }
 function personalHist(d) { return `<table class="hist"><tr><th>月</th><th>伝道</th><th>レッスン</th><th>補助</th><th>時間</th></tr>
@@ -529,14 +597,18 @@ function drawOverseer(d, stale) {
   // 入力する人は選ばない（共通URLは監督として記録。監督個人のURLは本人、書記のURLは書記）
   const byId = d.secretary ? '' : d.me ? d.me.id : '';
   OV = { d, ym: d.ym, byId, okLocked: false };
-  const opts = [ymAdd(d.ym, 1), d.ym, ymAdd(d.ym, -1), ymAdd(d.ym, -2)];
   const dl = deadlineLabel(d.ym, d.deadline);
-  // 締切後の月の注意（監督: 入力も変更もできない／書記: 入力・修正できる）
+  // 締切後・報告完了の月の注意（監督: 入力も変更もできない／書記: 入力・修正できる）
   const hubLabel = deadlineLabel(d.ym, d.hubDay || 20);
+  const doneAt = d.done && d.done.at ? '（' + doneLabel(d.done.at) + '）' : '';
   const lockNote = !d.locked ? '' : d.secretary
-    ? `<div class="msg warn">${ymLabel(d.ym)}分は締切（${dl}）を過ぎています。<b>書記として開いているので、まだ報告のない人の入力と、入力済みの報告（本人提出を含む）の修正ができます。</b><br>
-      支部への報告の期限（${hubLabel}）までに入れた報告は、${ymLabel(d.ym)}分の数字に入ります。期限を過ぎてから入れた報告は、次に支部へ送る月の会衆の報告に加えられます（「締切後に提出」と表示）。すでに数えた報告を直しても、数えた月のまま残ります。</div>`
+    ? (d.done ? `<div class="msg warn">${ymLabel(d.ym)}分は「報告完了」にしています${doneAt}。<b>書記として開いているので、入力・修正ができます。</b>支部へ送った数字と変わる場合は、hub も直してください。</div>`
+      : `<div class="msg warn">${ymLabel(d.ym)}分は締切（${dl}）を過ぎています。<b>書記として開いているので、まだ報告のない人の入力と、入力済みの報告（本人提出を含む）の修正ができます。</b><br>
+      支部への報告の期限（${hubLabel}）までに入れた報告は、${ymLabel(d.ym)}分の数字に入ります。期限を過ぎてから入れた報告は、次に支部へ送る月の会衆の報告に加えられます（「締切後に提出」と表示）。すでに数えた報告を直しても、数えた月のまま残ります。</div>`)
+    : d.done ? `<div class="msg warn">🔒 ${ymLabel(d.ym)}分は、書記が「報告完了」にしました${doneAt}。<b>入力も変更もできません。</b><br>まだ報告していない人・直す必要がある人は、書記に伝えてください（書記が入力します）。</div>`
     : `<div class="msg warn">🔒 ${ymLabel(d.ym)}分は締切（${dl}）を過ぎました。<b>入力も変更もできません。</b><br>まだ報告していない人・直す必要がある人は、書記に伝えてください（書記が入力します）。</div>`;
+  // グループの横に出す監督（補佐は出さない。古いサーバーの応答なら監督の印の人）
+  const leaderOf = (g) => g.leader !== undefined ? (g.leader ? '監督 ' + g.leader : '') : g.overseers.join('・');
   app.innerHTML = `
   <h1>野外奉仕報告　監督用</h1>
   <div class="sub">${esc(d.congregation)}　全グループ${d.secretary ? '（書記の修正）' : ''}</div>
@@ -545,32 +617,31 @@ function drawOverseer(d, stale) {
   <div id="ovInput">
   <div class="card">
     <div class="ovtop">
-      <div class="ovym"><label>月</label><select id="ym">${opts.map(y => `<option value="${y}" ${y === d.ym ? 'selected' : ''}>${ymLabel(y)}</option>`).join('')}</select></div>
+      <div class="ovym"><label>月（上下に回して選ぶ）</label>${monthDialHtml('ymDial', ovMonthList(d.ym), d.ym)}</div>
       <div class="ovtot"><label>全体の提出</label><div class="n" id="totalCount"></div></div>
     </div>
     ${lockNote}
     <div class="gsumh"><h3>グループの状況</h3><span class="muted">押すとそのグループを開きます</span></div>
-    <table class="gsum"><tr><th style="text-align:left">グループ</th><th>提出</th><th>未提出</th><th>月締め</th></tr>
-      ${d.groups.map((g, gi) => !g.members.length ? '' : `<tr class="g" data-gi="${gi}" id="gs-${gi}"><td class="l">${esc(g.group || '（グループなし）')}<div class="ovs">${g.overseers.map(esc).join('・')}</div></td><td class="gsub"></td><td class="gun"></td><td class="gcl"></td></tr>`).join('')}
+    <table class="gsum"><tr><th style="text-align:left">グループ</th><th>提出</th><th>未提出</th></tr>
+      ${d.groups.map((g, gi) => !g.members.length ? '' : `<tr class="g" data-gi="${gi}" id="gs-${gi}"><td class="l">${esc(g.group || '（グループなし）')}<div class="ovs">${esc(leaderOf(g))}</div></td><td class="gsub"></td><td class="gun"></td></tr>`).join('')}
     </table>
     <label style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:14px"><input type="checkbox" id="onlyUnsub" style="width:20px;height:20px"> 未提出の人だけ表示する</label>
   </div>
   <div id="groups">
   ${d.groups.map((g, gi) => !g.members.length ? '' : `
     <details class="card grp" id="g-${gi}" data-group="${esc(g.group)}">
-      <summary><b class="gname">${esc(g.group || '（グループなし）')}</b><span class="muted">${g.overseers.map(esc).join('・')}</span><span class="gcount" id="gh-${gi}"></span></summary>
+      <summary><b class="gname">${esc(g.group || '（グループなし）')}</b><span class="muted">${esc(leaderOf(g))}</span><span class="gcount" id="gh-${gi}"></span></summary>
       <div class="gbody">
         <div class="memh"><span>氏名</span><span>伝道</span><span>レッスン</span><span>補助</span><span>時間</span></div>
         ${g.members.map(m => memberRow(m)).join('')}
         <div class="msg warn" id="gu-${gi}"></div>
-        <button class="btn sec" data-close="${gi}">${esc(g.group)}の月締め完了</button>
       </div>
     </details>`).join('')}
   </div>
   <div class="card muted">
     ・1行入力するごとに自動保存されます（保存した行は一瞬緑色になります）。<br>
     ・グレーの行は本人がWEBで提出したものです。数字と備考は変えられませんが、開拓者の<b>加算時間</b>は入力できます。<br>
-    ・締切（翌月${d.deadline || 10}日）を過ぎた月は、まだ報告のない人の入力も、入力済みの報告（🔒）の変更（加算時間を含む）もできません。書記に伝えてください（書記が入力します）。<br>
+    ・締切（翌月${d.deadline || 10}日）を過ぎた月と、書記が「報告完了」にした月は、まだ報告のない人の入力も、入力済みの報告（🔒）の変更（加算時間を含む）もできません。書記に伝えてください（書記が入力します）。<br>
     ・入力した行を全部空にすると、未提出に戻ります。伝道しなかった月の報告を残すときは、備考に「伝道なし」などと書いてください。<br>
     ・<b>加算時間</b>（開拓者のみ）：承認された活動のうち加算できる時間。野外奉仕と合わせて月${d.cap}時間までです。報告の時間には含まれず、S-21の備考に記録されます。開拓者学校などの学校の時間は上限とは別なので、備考に「開拓者学校30h」のように書いてください。<br>
     ・不活発の人は各グループの最後に薄く表示されます。報告があれば入力できます。
@@ -594,20 +665,10 @@ function drawOverseer(d, stale) {
   markOpen();
   if (keep && keep.only) { $('#onlyUnsub').checked = true; $('#groups').classList.add('onlyUnsub'); }
   d.groups.forEach((g, gi) => updateGroupCounts(gi));
-  $('#ym').onchange = (e) => renderOverseer(e.target.value).catch(showError);
+  // 月はダイヤルで選ぶ（回し終わってまん中に来た月を開く）。月の締めは書記の「報告完了」（グループごとの月締めはなくした。2026-10-28）
+  bindMonthDial($('#ymDial'), (ym) => renderOverseer(ym).catch(showError));
   $('#onlyUnsub').onchange = (e) => $('#groups').classList.toggle('onlyUnsub', e.target.checked);
   document.querySelectorAll('tr.g').forEach(tr => tr.onclick = () => { const el = $('#g-' + tr.dataset.gi); el.open = true; el.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
-  document.querySelectorAll('[data-close]').forEach(b => b.onclick = async () => {
-    const gi = Number(b.dataset.close), g = d.groups[gi];
-    if (g.unsubmitted.length && !confirm(g.group + ' にはまだ未提出の人が ' + g.unsubmitted.length + ' 名います。月締めにしますか？')) return;
-    b.disabled = true;
-    try {
-      await flushSaves();   // 入力中の保存が全部終わってから締める
-      if ([...SQ.failed].some(k => k.endsWith('|' + OV.ym))) throw new Error('保存できていない行（⚠未保存）があります。その行をもう一度入力してください。');
-      const r = await call({ action: 'closeMonth', ym: OV.ym, group: g.group, by: OV.byId });
-      g.closed = r.closed; updateGroupCounts(gi); cacheOverseer(); toast(g.group + ' の月締めを記録しました');
-    } catch (e) { if (e.code === 'pass') ovNeedPass(e, () => b.click()); else toast(e.message, 'err'); } finally { b.disabled = false; }
-  });
   d.groups.forEach((g, gi) => g.members.forEach(m => bindMember(m, gi)));
   document.querySelectorAll('#ovSeg button').forEach(b => b.onclick = () => ovShowView(b.dataset.v));
   ovShowView(ovView);
@@ -622,6 +683,7 @@ function ovShowView(v) {
   const inp = $('#ovInput'), st = $('#ovStats'); if (!inp || !st) return;
   inp.style.display = ovView === 'input' ? '' : 'none';
   st.style.display = ovView === 'stats' ? '' : 'none';
+  if (ovView === 'input') { const dl = $('#ymDial'); if (dl && dl._sync) dl._sync(); }   // 隠れていた間はダイヤルの位置を合わせられないので、見えたときに合わせる
   if (ovView === 'stats') { drawOvStats(); loadOvStats(); }
 }
 async function loadOvStats(force) {
@@ -710,14 +772,12 @@ function updateGroupCounts(gi) {
   $('#totalCount').innerHTML = `<b>${all[0]}</b> / ${all[1]} 名`;
   const tr = $('#gs-' + gi);
   if (!tr) return;   // 人のいないグループは表示しない
-  const cby = g.closed ? [g.closed.by, g.closed.at].filter(Boolean).map(esc).join(' ') : '';
   $('.gsub', tr).textContent = g.submitted + ' / ' + act.length;
   $('.gun', tr).innerHTML = g.unsubmitted.length ? `<span class="unsub">${g.unsubmitted.length}名</span>` : '<span class="alldone">0</span>';
-  $('.gcl', tr).innerHTML = g.closed ? `<span class="pill ok">済</span>${g.closed.by ? `<div class="ovs">${esc(g.closed.by)}</div>` : ''}` : '';
-  $('#gh-' + gi).innerHTML = (g.closed ? '<span class="pill ok">月締め済</span> ' : '') + (g.unsubmitted.length ? `未提出 <span class="unsub">${g.unsubmitted.length}</span>` : '<span class="alldone">全員提出</span>');
+  $('#gh-' + gi).innerHTML = g.unsubmitted.length ? `未提出 <span class="unsub">${g.unsubmitted.length}</span>` : '<span class="alldone">全員提出</span>';
   const u = $('#gu-' + gi);
   u.className = 'msg ' + (g.unsubmitted.length ? 'warn' : 'ok');
-  u.innerHTML = g.unsubmitted.length ? `未提出 <b>${g.unsubmitted.length}名</b>（${g.unsubmitted.map(esc).join('・')}）` : '活発な人は全員提出済みです' + (g.closed ? `（月締め${cby ? ': ' + cby : '済み'}）` : '');
+  u.innerHTML = g.unsubmitted.length ? `未提出 <b>${g.unsubmitted.length}名</b>（${g.unsubmitted.map(esc).join('・')}）` : '活発な人は全員提出済みです';
 }
 function rowStatus(m) {
   const r = m.report;
@@ -873,7 +933,7 @@ function secShowTab(t) {
   secTab = t;
   document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x.dataset.tab === t));
   ['hub', 'check', 'pioneer', 'pdf', 'setup'].forEach(k => { const el = $('#tab-' + k); if (el) el.style.display = k === t ? '' : 'none'; });
-  if (t === 'setup') { loadMapKeyStatus(); loadOvPass(); loadAttHist(); loadHubNumbers(); loadRoster(); }
+  if (t === 'setup') { loadGroupRoster(); loadMapKeyStatus(); loadOvPass(); loadAttHist(); loadHubNumbers(); loadRoster(); }
   if (t === 'pdf') { loadBackupStatus(); loadVisits(); }
 }
 // ------------------------------------------------------------
@@ -1176,6 +1236,355 @@ async function issueMapKey() {
   } catch (e) { toast(e.message, 'err'); }
   finally { const b = $('#mkIssue'); if (b) b.disabled = false; }
 }
+// ------------------------------------------------------------
+// 書記: 報告完了（hub入力タブ。2026-10-28〜）。押した月は、監督の画面・個人用URL・区域マップから入力も変更もできない（締切の前でも）
+// ------------------------------------------------------------
+function doneCardHtml(d) {
+  const M = Number(d.ym.slice(5)) + '月分';
+  if (d.done) return `<h3>${M}の報告完了</h3><div class="msg ok" style="margin:6px 0">✓ ${M}は報告完了にしました（${esc(doneLabel(d.done.at))}）。<br>監督の画面・個人用URL・区域マップからは、${M}の入力も変更もできません。直すときは「確認事項」→「${esc(ymLabel(d.ym))}分の報告を直す」で、書記として入力します。</div>
+    <button class="btn sm sec" id="doneClear">報告完了を取り消す</button>`;
+  return `<h3>hub への入力が終わったら</h3><p class="muted" style="margin:4px 0">押すと、${M}は監督の画面・個人用URL・区域マップから入力も変更もできなくなります（締切の${d.deadline || 10}日より前でも）。書記は直せます。あとで取り消すこともできます。</p>
+    <button class="btn" id="doneSet">${M} 報告完了</button>`;
+}
+function bindDoneCard(d) {
+  const M = Number(d.ym.slice(5)) + '月分';
+  const saved = () => { cacheSet('sec:' + d.ym, d); const cur = cacheGet('sec:cur'); if (cur && cur.ym === d.ym) cacheSet('sec:cur', d); const c = $('#doneCard'); if (c) { c.innerHTML = doneCardHtml(d); bindDoneCard(d); } };
+  const set = $('#doneSet'), clr = $('#doneClear');
+  if (set) set.onclick = async () => {
+    const un = (d.unsubmitted || []).length;
+    if (!confirm(`${M}を「報告完了」にします。${un ? `\n（まだ報告していない活発な人が ${un}名います）` : ''}\n\n監督の画面・個人用URL・区域マップからは、${M}の入力も変更もできなくなります（書記は直せます）。\nよろしいですか？`)) return;
+    set.disabled = true;
+    try { const r = await call({ action: 'monthDone', op: 'set', ym: d.ym }); d.done = r.done; saved(); toast(M + 'を報告完了にしました'); }
+    catch (e) { toast(e.message, 'err'); set.disabled = false; }
+  };
+  if (clr) clr.onclick = async () => {
+    if (!confirm(`${M}の「報告完了」を取り消しますか？\n監督の画面・個人用URL・区域マップから、また入力・変更できるようになります（締切までは）。`)) return;
+    clr.disabled = true;
+    try { await call({ action: 'monthDone', op: 'clear', ym: d.ym }); d.done = null; saved(); toast('報告完了を取り消しました'); }
+    catch (e) { toast(e.message, 'err'); clr.disabled = false; }
+  };
+}
+
+// ------------------------------------------------------------
+// 書記: グループ編成の変更（初期設定タブ。2026-10-28〜）
+//   グループ表（PDF）をこの端末で読み取る（pdf.js）→ サーバーが名簿と突き合わせる（groupRoster preview）→ 確かめて直す → 反映（apply）
+//   反映すると、名簿のグループ・監督、監督の画面の並び（表の順）、URL一覧、S-21 の保存フォルダ（すぐ分け直す）が新しい編成になる
+// ------------------------------------------------------------
+// ROSTER-PARSE-BEGIN
+const ROSTER_MARK_RE = /^[長開援補子伝不監聖奉特宣・･\s]{1,6}$/;
+const ROSTER_ROLE_RE = /^(監|監督|補|補佐|助手|副)$/;
+function rosterBands(items, tolK) {
+  const sorted = items.slice().sort((a, b) => b.y - a.y || a.x - b.x);
+  const bands = [];
+  sorted.forEach(it => {
+    const b = bands[bands.length - 1];
+    const tol = Math.max(2, (tolK || 0.35) * Math.min(it.h, b ? b.h : it.h));
+    if (b && Math.abs(b.y - it.y) <= tol) { b.items.push(it); b.h = Math.max(b.h, it.h); }
+    else bands.push({ y: it.y, h: it.h, items: [it] });
+  });
+  bands.forEach(b => b.items.sort((a, c) => a.x - c.x));
+  return bands;
+}
+function rosterAsOf(texts, fileName) {
+  const t = texts.join(' ').normalize('NFKC');
+  let m = t.match(/(\d{4})\s*[\/年.\-]\s*(\d{1,2})\s*[\/月.\-]\s*(\d{1,2})\s*日?\s*[〜~～\-－]/) || t.match(/(\d{4})\s*[\/年.\-]\s*(\d{1,2})\s*[\/月.\-]\s*(\d{1,2})/);
+  if (m) return m[1] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[3]).slice(-2);
+  m = t.match(/(\d{4})\s*年\s*(\d{1,2})\s*月/);
+  if (m) return m[1] + '-' + ('0' + m[2]).slice(-2) + '-01';
+  m = String(fileName || '').match(/(20\d{2})(\d{2})(\d{2})?(?!\d)/);
+  if (m && Number(m[2]) >= 1 && Number(m[2]) <= 12) return m[1] + '-' + m[2] + '-' + (m[3] || '01');
+  return '';
+}
+/** 文字を行ごとにまとめたテキスト（見出しが見つからないとき、サーバーで読む） */
+function rosterLines(pages) {
+  const out = [];
+  pages.forEach(pg => rosterBands(pg.items, 0.5).forEach(b => {
+    let line = '', prev = null;
+    b.items.forEach(it => { if (prev) line += (it.x - (prev.x + prev.w) > Math.max(prev.h, it.h) * 1.2) ? '\t' : ''; line += it.s; prev = it; });
+    out.push(line);
+  }));
+  return out.join('\n');
+}
+/**
+ * グループ表の文字（位置つき）→ {kind:'columns', groups:[{label, leader, assistant, members:[{label, marks}]}], asOf} ／ {kind:'text', text} ／ {kind:'empty'}
+ *   グループ名が横に並ぶ見出しを探し、その下の名前を列ごとにそのグループの人とする。左端の「監」「補」の行は監督・補佐。
+ *   数字（年齢・番号）と、名前の横の小さな印（長・開・援 など）は名前に入れない。pages: [{items:[{s, x, y（下から）, w, h}]}]
+ */
+function parseRosterItems(pages, fileName) {
+  pages = (pages || []).map(pg => ({ items: (pg.items || []).filter(it => String(it.s || '').trim()).map(it => ({ s: String(it.s).trim(), x: it.x, y: it.y, w: it.w || 0, h: it.h || 10 })) }));
+  const all = [].concat(...pages.map(p => p.items));
+  if (!all.length) return { kind: 'empty' };
+  const asOf = rosterAsOf(all.map(i => i.s), fileName);
+  let cols = null;   // 前のページの列（見出しのないページに使う）
+  const groups = [];
+  const titleTexts = [];
+  pages.forEach(pg => {
+    const items = pg.items;
+    if (!items.length) return;
+    const bands = rosterBands(items);
+    const minX = Math.min(...items.map(i => i.x));
+    const isLeft = (it) => it.x <= minX + 20;
+    const roleItems = items.filter(it => ROSTER_ROLE_RE.test(it.s) && isLeft(it));
+    const usable = (b) => b.items.filter(it => it.s.length <= 14 && !/^\d+$/.test(it.s) && !ROSTER_ROLE_RE.test(it.s));
+    // 見出しの行: 「監」の行のすぐ上 → 「○○グループ」が2つ以上の行 → 番号「1」の行のすぐ上
+    let head = null;
+    const above = (y) => bands.filter(b => b.y > y + 2 && usable(b).length >= 2).sort((a, b) => a.y - b.y)[0] || null;
+    const top = roleItems.slice().sort((a, b) => b.y - a.y)[0];
+    if (top) head = above(top.y);
+    if (!head) head = bands.filter(b => b.items.filter(it => /グループ$/.test(it.s.replace(/\s/g, ''))).length >= 2)[0] || null;
+    if (!head) { const one = items.filter(it => it.s === '1' && isLeft(it)).sort((a, b) => b.y - a.y)[0]; if (one) head = above(one.y); }
+    let headY;
+    if (head) {
+      const hs = usable(head);
+      cols = hs.map(it => ({ label: it.s.replace(/\s+/g, ''), c: it.x + it.w / 2 }));
+      headY = head.y;
+      bands.filter(b => b.y > head.y + 2).forEach(b => b.items.forEach(it => titleTexts.push(it.s)));
+      cols.forEach(c => { if (!groups.some(g => g.label === c.label)) groups.push({ label: c.label, leader: '', assistant: '', members: [] }); });
+    } else if (cols) headY = Infinity;
+    else return;
+    const n = cols.length;
+    if (n < 2) return;
+    const bound = (i) => i < 0 ? cols[0].c - (cols[1].c - cols[0].c) / 2 : i >= n - 1 ? Infinity : (cols[i].c + cols[i + 1].c) / 2;
+    const colOf = (it) => { const c = it.x + it.w / 2; if (c < bound(-1)) return -1; for (let i = 0; i < n; i++) if (c < bound(i)) return i; return n - 1; };
+    const body = items.filter(it => it.y < headY - 2 && !(head && head.items.indexOf(it) >= 0));
+    for (let ci = 0; ci < n; ci++) {
+      const g = groups.find(x => x.label === cols[ci].label);
+      const mine = body.filter(it => colOf(it) === ci);
+      const markLike = (it) => ROSTER_MARK_RE.test(it.s) && it.s.replace(/[・･\s]/g, '').length <= 3;
+      const nh = mine.filter(it => !markLike(it) && !/^\d/.test(it.s)).map(it => it.h).sort((a, b) => a - b);
+      const nameH = nh.length ? nh[Math.floor(nh.length / 2)] : 0;   // この列の名前の文字の大きさ（印は小さい）
+      rosterBands(mine, 0.45).forEach(row => {
+        const names = [], marks = [];
+        const rest = row.items.filter(it => !/^\d+\s*(歳|才)?$/.test(it.s));      // 年齢・番号は除く
+        // 長・開 などの印。ただし行が印のような文字だけで、名前と同じ大きさの2文字以上なら、いちばん右を名前とする（「正子」のような短い名前）
+        const nameItems = rest.filter(it => !markLike(it));
+        const last = rest[rest.length - 1];
+        if (!nameItems.length && last && last.s.replace(/[・･\s]/g, '').length >= 2 && (!nameH || last.h >= nameH * 0.92)) nameItems.push(last);
+        rest.forEach(it => { if (nameItems.indexOf(it) >= 0) names.push(it.s.replace(/\s*\d+\s*(歳|才)?$/, '')); else marks.push(it.s.replace(/\s+/g, '')); });
+        const label = names.join(' ').replace(/\s+/g, ' ').trim();
+        if (!label) return;
+        const role = roleItems.find(r => Math.abs(r.y - row.y) <= Math.max(3, row.h * 0.5));
+        const kind = role ? (/^(補|補佐|助手|副)$/.test(role.s) ? 'assistant' : 'leader') : '';
+        if (kind === 'leader' && !g.leader) g.leader = label;
+        else if (kind === 'assistant' && !g.assistant) g.assistant = label;
+        else if (!kind) g.members.push({ label, marks: marks.join('') });
+      });
+    }
+  });
+  if (!groups.length) return { kind: 'text', text: rosterLines(pages), asOf };
+  return { kind: 'columns', groups, asOf, title: titleTexts.join(' ').slice(0, 120) };
+}
+// ROSTER-PARSE-END
+const PDFJS_V = '3.11.174';
+const PDFJS_SRC = [`https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_V}/`, `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_V}/build/`];
+const PDFJS_CMAP = [`https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_V}/cmaps/`, `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_V}/cmaps/`];
+let pdfjsBase = -1;
+async function loadPdfJs() {
+  if (window.pdfjsLib && pdfjsBase >= 0) return window.pdfjsLib;
+  for (let i = 0; i < PDFJS_SRC.length; i++) {
+    try {
+      await new Promise((ok, ng) => { const sc = document.createElement('script'); sc.src = PDFJS_SRC[i] + 'pdf.min.js'; sc.onload = ok; sc.onerror = ng; document.head.appendChild(sc); });
+      if (window.pdfjsLib) { window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_SRC[i] + 'pdf.worker.min.js'; pdfjsBase = i; return window.pdfjsLib; }
+    } catch (e) {}
+  }
+  throw new Error('PDFを読む部品を読み込めませんでした。電波の良い所でもう一度お試しください。');
+}
+/** PDF → ページごとの文字と位置（左下が原点。回転したページも見た目の向きにそろえる） */
+async function rosterPdfPages(buf) {
+  const lib = await loadPdfJs();
+  const doc = await lib.getDocument({ data: new Uint8Array(buf), cMapUrl: PDFJS_CMAP[pdfjsBase], cMapPacked: true, isEvalSupported: false }).promise;
+  const pages = [];
+  for (let p = 1; p <= Math.min(doc.numPages, 6); p++) {
+    const page = await doc.getPage(p), vp = page.getViewport({ scale: 1 }), tc = await page.getTextContent();
+    pages.push({ items: tc.items.filter(it => it.str && it.str.trim()).map(it => {
+      const m = lib.Util.transform(vp.transform, it.transform);
+      return { s: it.str, x: m[4], y: vp.height - m[5], w: it.width, h: Math.hypot(m[2], m[3]) || 10 };
+    }) });
+  }
+  return pages;
+}
+
+let grInfo = null, grLoading = false, grP = null;   // grP: 確認中の内容（サーバーの突き合わせ＋書記が直したところ）
+async function loadGroupRoster() {
+  if (grLoading) return;
+  grLoading = true;
+  try { grInfo = await call({ action: 'groupRoster', op: 'status' }, { quiet: true, retry: true }); }
+  catch (e) { grInfo = { error: e.message }; }
+  finally { grLoading = false; drawGroupStatus(); }
+}
+const ymdJa = (s) => { const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[1] + '/' + Number(m[2]) + '/' + Number(m[3]) : ''; };
+function drawGroupStatus() {
+  const box = $('#grStatus'); if (!box) return;
+  const i = grInfo;
+  if (!i) { box.innerHTML = '<span class="muted">いまの編成を確認中…</span>'; return; }
+  if (i.error) { box.innerHTML = `<div class="msg err">確認できませんでした（${esc(i.error)}）</div>`; return; }
+  const c = i.cfg;
+  box.innerHTML = `<div class="muted" style="margin-top:6px">いまの編成${c && c.asOf ? '（' + esc(ymdJa(c.asOf)) + '〜' + (c.file ? '・' + esc(c.file) : '') + '）' : ''}　全 ${i.total}人</div>
+    <table class="grt"><tr><th>グループ</th><th>監督</th><th>補佐</th><th style="text-align:right">人数</th></tr>
+    ${i.groups.map(g => `<tr><td>${esc(g.name || '（グループなし）')}</td>${!g.leader && !g.assistant && (g.marked || []).length ? `<td colspan="2"><span class="muted">決まっていません（監督の印: ${(g.marked || []).map(esc).join('・')}）</span></td>` : `<td>${esc(g.leader) || '<span class="muted">—</span>'}</td><td>${esc(g.assistant) || '<span class="muted">—</span>'}</td>`}<td class="n">${g.count}人</td></tr>`).join('')}</table>
+    ${i.groups.some(g => !g.leader && (g.marked || []).length > 1) ? '<div class="muted">監督・補佐が決まっていないグループは、監督の画面にグループの監督が出ません。「表なしで、いまの編成を直す」で監督・補佐を選んでください。</div>' : ''}
+    ${i.undo ? `<div class="vi" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px"><span style="flex:1;min-width:160px">${esc(doneLabel(i.undo.at))} に反映（グループ・監督が変わった人 ${i.undo.changed}人）</span><button class="btn sm sec" id="grUndo" style="margin:0">この反映を元に戻す</button></div>` : ''}`;
+  const u = $('#grUndo'); if (u) u.onclick = undoGroupRoster;
+}
+/** グループ表のファイルを読む → サーバーで名簿と突き合わせる */
+async function readGroupFile(file) {
+  if (!file) return;
+  if (file.size > 8 * 1024 * 1024) return toast('ファイルが大きすぎます（8MBまで）', 'err');
+  const btn = $('#grFileBtn'); btn.disabled = true; btn.textContent = '読み取っています…';
+  grP = null; drawGroupPreview();
+  try {
+    let q = { action: 'groupRoster', op: 'preview', file: file.name };
+    if (/\.pdf$/i.test(file.name) || file.type === 'application/pdf') {
+      const buf = await file.arrayBuffer();
+      const r = parseRosterItems(await rosterPdfPages(buf.slice(0)), file.name);
+      if (r.kind === 'columns') Object.assign(q, { groups: r.groups, asOf: r.asOf });
+      else if (r.kind === 'text') Object.assign(q, { text: r.text, asOf: r.asOf });
+      else {   // 文字の入っていないPDF（スキャン）: サーバーで文字認識
+        if (!confirm('このPDFには文字が入っていません（スキャンしたもの）。\nGoogle の文字認識で読みますが、読み違いが多くなります。続けますか？\n（Excel などから保存したPDFがあれば、そちらがおすすめです）')) return;
+        btn.textContent = '文字認識しています…';
+        let bin = ''; const u8 = new Uint8Array(buf); for (let i = 0; i < u8.length; i += 0x8000) bin += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+        Object.assign(q, { pdf: btoa(bin), asOf: rosterAsOf([], file.name) });
+      }
+    } else {
+      const text = await file.text();
+      Object.assign(q, { text, asOf: rosterAsOf([text], file.name) });
+    }
+    const res = await call(q);
+    grSetPreview(res);
+  } catch (e) { toast(e.message, 'err'); }
+  finally { btn.disabled = false; btn.textContent = 'グループ表（PDF）を選ぶ'; $('#grFile').value = ''; }
+}
+async function manualGroupRoster() {
+  const b = $('#grManual'); b.disabled = true;
+  try { grSetPreview(await call({ action: 'groupRoster', op: 'preview', mode: 'current' })); }
+  catch (e) { toast(e.message, 'err'); }
+  finally { b.disabled = false; }
+}
+/** サーバーの突き合わせ → 画面で直せる形 */
+function grSetPreview(r) {
+  const people = {}; r.roster.forEach(p => { people[p.id] = p; });
+  const gi = {}; r.groups.forEach((g, i) => { gi[g.name] = i; });
+  const assign = {}; r.people.forEach(p => { assign[p.id] = p.next ? gi[p.next] : -1; });
+  grP = {
+    mode: r.source === 'current' ? 'current' : 'table', source: r.source, file: r.file, asOf: r.asOf || '',
+    groups: r.groups.map(g => ({ name: g.name, leader: g.leader || '', assistant: g.assistant || '', order: g.members.filter(m => m.id).map(m => m.id), leaderLabel: g.leaderLabel, assistantLabel: g.assistantLabel, leaderHow: g.leaderHow, assistantHow: g.assistantHow })),
+    people, assign, info: {}, extra: r.extra.map(x => Object.assign({}, x, { gi: gi[x.group], pick: '' })), stats: r.stats, open: {},
+  };
+  r.people.forEach(p => { grP.info[p.id] = { cur: p.cur, how: p.how, label: p.label }; });
+  drawGroupPreview();
+  const out = $('#grOut'); if (out) out.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+const GR_HOW = { exact: '', variant: '表記ちがい', family: '名字の省略', cut: '途中で切れた名前', similar: '1字ちがい', ambiguous: '同じような名前が複数', dup: '表に2回', missing: '表にない' };
+const GR_CHECK = { similar: 1, cut: 1, ambiguous: 1, dup: 1 };
+function grGroupOptions(sel) {
+  return grP.groups.map((g, i) => `<option value="${i}" ${i === sel ? 'selected' : ''}>${esc(g.name || '（名前なし）')}</option>`).join('') + `<option value="-1" ${sel === -1 ? 'selected' : ''}>（グループなし）</option>`;
+}
+function grPersonRow(id, extraNote) {
+  const p = grP.people[id], inf = grP.info[id] || {}, a = grP.assign[id];
+  const nextName = a >= 0 ? grP.groups[a].name : '';
+  const moved = nextName !== (inf.cur || '');
+  const notes = [];
+  if (moved) notes.push('いま: ' + esc(inf.cur || '（グループなし）'));
+  if (inf.how && GR_HOW[inf.how] && inf.how !== 'missing') notes.push('表「' + esc(inf.label) + '」（' + GR_HOW[inf.how] + '）');
+  if (inf.how === 'missing' && grP.mode === 'table') notes.push('表にない人');
+  if (!p.active) notes.push('不活発');
+  if (extraNote) notes.push(extraNote);
+  return `<div class="grp-r${moved ? ' moved' : ''}"><div class="t"><span>${esc(p.name)}</span>${notes.length ? `<small>${notes.join('・')}</small>` : ''}</div><select data-grp="${esc(id)}" aria-label="${esc(p.name)}のグループ">${grGroupOptions(a)}</select></div>`;
+}
+function drawGroupPreview() {
+  const out = $('#grOut'); if (!out) return;
+  if (!grP) { out.innerHTML = ''; return; }
+  const P = grP, ids = Object.keys(P.people);
+  const moved = ids.filter(id => (P.assign[id] >= 0 ? P.groups[P.assign[id]].name : '') !== (P.info[id].cur || ''));
+  const check = ids.filter(id => GR_CHECK[P.info[id].how]);
+  const missing = P.mode === 'table' ? ids.filter(id => P.info[id].how === 'missing') : [];
+  const extra = P.extra.filter(x => x.pick === '');
+  const byG = P.groups.map(() => []); const none = [];
+  ids.forEach(id => { const a = P.assign[id]; (a >= 0 ? byG[a] : none).push(id); });
+  const ord = (gidx, list) => { const o = P.groups[gidx] ? P.groups[gidx].order : []; return list.sort((a, b) => { const ia = o.indexOf(a), ib = o.indexOf(b); return (ia < 0 ? 1e6 : ia) - (ib < 0 ? 1e6 : ib) || String(P.people[a].name).localeCompare(String(P.people[b].name), 'ja'); }); };
+  const opt = (list, sel) => '<option value="">なし</option>' + list.map(id => `<option value="${esc(id)}" ${id === sel ? 'selected' : ''}>${esc(P.people[id].name)}</option>`).join('');
+  const roleNote = (g, k) => g[k + 'Label'] && g[k + 'How'] && g[k + 'How'] !== 'exact' && g[k + 'How'] !== 'variant' ? `<div class="muted" style="grid-column:2">表「${esc(g[k + 'Label'])}」${g[k] ? '（' + (GR_HOW[g[k + 'How']] || '') + '・確かめてください）' : 'は名簿で見つかりませんでした'}</div>` : '';
+  const S = P.stats;
+  let h = P.mode === 'current'
+    ? `<div class="msg ok" style="margin-top:10px">いまの編成を表示しています。グループ・監督・補佐を直して「反映する」を押してください。</div>`
+    : `<div class="msg ${check.length || extra.length || missing.length ? 'warn' : 'ok'}" style="margin-top:10px">「${esc(P.file)}」から <b>${S.groups}グループ・${S.table}人</b>を読み取りました${P.source === 'ocr' ? '（文字認識）' : ''}。<br>
+      名簿の人と一致 ${S.matched}人 ／ <b>グループが変わる人 ${moved.length}人</b>${check.length ? ` ／ 確かめてほしい人 ${check.length}人` : ''}${missing.length ? ` ／ 表にない人 ${missing.length}人` : ''}${extra.length ? ` ／ 名簿にいない名前 ${extra.length}件` : ''}</div>`;
+  h += `<div class="kv" style="margin-top:8px"><span class="k">この編成はいつから</span><input type="date" id="grAsOf" value="${esc(P.asOf)}" style="width:auto;font-size:15px;padding:5px 6px;border:1px solid var(--line);border-radius:6px"></div>`;
+  if (check.length || missing.length || extra.length) {
+    h += `<div class="grbox need"><b>確かめてください</b><div class="muted" style="margin:2px 0 4px">グループを選び直せます。名簿にいない名前は、名簿の人を選ぶとその人をそのグループにします（子どもなど名簿にいない人は「反映しない」のままで構いません）。</div>
+      ${check.map(id => grPersonRow(id)).join('')}
+      ${missing.map(id => grPersonRow(id, (P.info[id].cur && P.assign[id] < 0 ? 'いまのグループは表にありません' : 'いまのグループのまま'))).join('')}
+      ${extra.map(x => { const i = P.extra.indexOf(x); const cands = (x.cands || []).filter(id => P.people[id]); const rest = ids.filter(id => cands.indexOf(id) < 0).sort((a, b) => String(P.people[a].name).localeCompare(String(P.people[b].name), 'ja'));
+        return `<div class="grp-r"><div class="t"><span>表「${esc(x.label)}」</span><small>${esc(P.groups[x.gi] ? P.groups[x.gi].name : x.group)}・名簿にいない名前${x.how === 'dup' ? '（表に2回）' : x.how === 'ambiguous' ? '（同じような名前が複数）' : ''}</small></div>
+          <select data-extra="${i}" aria-label="表の${esc(x.label)}は名簿のだれか"><option value="">反映しない</option>${cands.length ? '<optgroup label="候補">' + cands.map(id => `<option value="${esc(id)}">${esc(P.people[id].name)}（${esc(P.info[id].cur || 'グループなし')}）</option>`).join('') + '</optgroup>' : ''}<optgroup label="名簿の人">${rest.map(id => `<option value="${esc(id)}">${esc(P.people[id].name)}</option>`).join('')}</optgroup></select></div>`; }).join('')}</div>`;
+  }
+  h += `<div class="grbox"><b>グループが変わる人（${moved.length}人）</b>${moved.length ? moved.map(id => grPersonRow(id)).join('') : '<div class="muted" style="margin-top:4px">いません</div>'}</div>`;
+  h += `<div style="margin-top:12px;font-size:14px;font-weight:bold;color:var(--navy)">グループごと（表の順）</div>`;
+  P.groups.forEach((g, i) => {
+    const mem = ord(i, byG[i]);
+    h += `<details class="grg" data-gi="${i}" ${P.open[i] ? 'open' : ''}><summary>${esc(g.name || '（名前なし）')} <small>${mem.length}人・監督 ${esc(g.leader && P.people[g.leader] ? P.people[g.leader].name : 'なし')}</small></summary>
+      <div class="gl"><span>名前</span><input type="text" data-gname="${i}" value="${esc(g.name)}">
+        <span>監督</span><select data-lead="${i}">${opt(mem, g.leader)}</select>${roleNote(g, 'leader')}
+        <span>補佐</span><select data-asst="${i}">${opt(mem, g.assistant)}</select>${roleNote(g, 'assistant')}</div>
+      ${mem.map(id => grPersonRow(id)).join('') || '<div class="muted">人がいません（反映するとこのグループはなくなります）</div>'}</details>`;
+  });
+  if (none.length) h += `<details class="grg" data-gi="-1" ${P.open[-1] ? 'open' : ''}><summary>（グループなし） <small>${none.length}人</small></summary>${none.map(id => grPersonRow(id)).join('')}</details>`;
+  h += `<button class="btn sm sec" id="grAdd">グループを追加</button>
+    <button class="btn" id="grApply">この内容で反映する</button><button class="btn sec" id="grCancel">やめる</button>
+    <div class="muted" style="margin-top:6px">反映すると: 名簿のグループと監督の印（監督・補佐）を書き換え、監督の画面のグループと人の並びを表の順に、URL一覧を作り直し、S-21 の保存フォルダをグループごとに分け直します（数分。この画面を閉じても続きます）。反映のあとでも、直前の反映は元に戻せます。</div>`;
+  out.innerHTML = h;
+  out.querySelectorAll('select[data-grp]').forEach(s => s.onchange = () => { P.assign[s.dataset.grp] = Number(s.value); drawGroupPreview(); });
+  out.querySelectorAll('select[data-extra]').forEach(s => s.onchange = () => {
+    const x = P.extra[Number(s.dataset.extra)];
+    if (!s.value) return;
+    x.pick = s.value;
+    if (x.gi >= 0) { P.assign[s.value] = x.gi; P.groups[x.gi].order.push(s.value); }
+    P.info[s.value] = Object.assign({}, P.info[s.value], { how: 'exact', label: x.label });
+    drawGroupPreview(); toast(P.people[s.value].name + 'さんを ' + (P.groups[x.gi] ? P.groups[x.gi].name : '') + ' にしました');
+  });
+  out.querySelectorAll('input[data-gname]').forEach(inp => inp.onchange = () => { P.groups[Number(inp.dataset.gname)].name = inp.value.trim(); drawGroupPreview(); });
+  out.querySelectorAll('select[data-lead]').forEach(s => s.onchange = () => { P.groups[Number(s.dataset.lead)].leader = s.value; drawGroupPreview(); });
+  out.querySelectorAll('select[data-asst]').forEach(s => s.onchange = () => { P.groups[Number(s.dataset.asst)].assistant = s.value; drawGroupPreview(); });
+  out.querySelectorAll('details.grg').forEach(dt => dt.addEventListener('toggle', () => { P.open[dt.dataset.gi] = dt.open; }));
+  $('#grAsOf').onchange = (e) => { P.asOf = e.target.value; };
+  $('#grAdd').onclick = () => { const name = prompt('新しいグループの名前（例: ○○グループ）'); if (!name || !name.trim()) return; P.groups.push({ name: name.trim(), leader: '', assistant: '', order: [] }); P.open[P.groups.length - 1] = true; drawGroupPreview(); };
+  $('#grCancel').onclick = () => { grP = null; drawGroupPreview(); };
+  $('#grApply').onclick = applyGroupRoster;
+}
+async function applyGroupRoster() {
+  const P = grP; if (!P) return;
+  const ids = Object.keys(P.people);
+  const used = P.groups.map((g, i) => ids.some(id => P.assign[id] === i));
+  const names = P.groups.filter((g, i) => used[i]).map(g => g.name);
+  if (names.some(n => !n)) return toast('名前のないグループがあります', 'warn');
+  if (new Set(names).size !== names.length) return toast('同じ名前のグループが2つあります', 'warn');
+  // 監督・補佐がそのグループにいなければ外す（グループを選び直したとき）
+  P.groups.forEach((g, i) => { ['leader', 'assistant'].forEach(k => { if (g[k] && P.assign[g[k]] !== i) g[k] = ''; }); });
+  const moved = ids.filter(id => (P.assign[id] >= 0 ? P.groups[P.assign[id]].name : '') !== (P.info[id].cur || '')).length;
+  const noLead = P.groups.filter((g, i) => used[i] && !g.leader).map(g => g.name);
+  const pending = P.extra.filter(x => x.pick === '').length;
+  if (!confirm(`グループ ${names.length}つ・グループが変わる人 ${moved}人で反映します。${noLead.length ? '\n監督が決まっていないグループ: ' + noLead.join('・') : ''}${pending ? '\n名簿にいない名前 ' + pending + '件は反映しません。' : ''}\n\n監督の画面・URL一覧・S-21 の保存フォルダが新しい編成になります。よろしいですか？`)) return;
+  const groups = P.groups.map((g, i) => ({ g, i })).filter(x => used[x.i]).map(({ g }) => ({ name: g.name, leader: g.leader, assistant: g.assistant }));
+  const assign = {}; ids.forEach(id => { assign[id] = P.assign[id] >= 0 ? P.groups[P.assign[id]].name : ''; });
+  const order = {}; P.groups.forEach((g, i) => { if (used[i]) order[g.name] = g.order.filter(id => P.assign[id] === i); });
+  const b = $('#grApply'); b.disabled = true; b.textContent = '反映しています…';
+  try {
+    const r = await call({ action: 'groupRoster', op: 'apply', groups, assign, order, asOf: P.asOf, file: P.mode === 'current' ? '' : P.file, mode: P.mode });
+    grInfo = r; grP = null; drawGroupStatus(); drawGroupPreview();
+    toast(`反映しました（グループ・監督が変わった人 ${r.changed}人）。` + (r.backup && r.backup.started ? 'S-21 の保存フォルダの分け直しを始めました。' : ''));
+  } catch (e) { toast(e.message, 'err'); b.disabled = false; b.textContent = 'この内容で反映する'; }
+}
+async function undoGroupRoster() {
+  const u = grInfo && grInfo.undo; if (!u) return;
+  if (!confirm(`${doneLabel(u.at)} の反映を元に戻しますか？\n（そのあとに手で変えた人は、そのままにします）`)) return;
+  const b = $('#grUndo'); b.disabled = true;
+  try {
+    const r = await call({ action: 'groupRoster', op: 'undo', batch: u.batch });
+    grInfo = r; drawGroupStatus();
+    toast(`元に戻しました（${r.back}人）` + (r.kept ? `。そのあとに変えた ${r.kept}人はそのままです` : ''));
+  } catch (e) { toast(e.message, 'err'); b.disabled = false; }
+}
+
 function drawSecretary(d, stale) {
   sec = d;
   const opts = []; for (let i = -1; i < 13; i++) opts.push(ymAdd(d.ym, -i + 0)); const sel = [...new Set([ymAdd(d.ym, 1), ...opts])];
@@ -1201,6 +1610,7 @@ function drawSecretary(d, stale) {
     </div>
     <div class="muted">※ 遅延提出 ${d.lateCount} 件を加算済み ／ 特別開拓者・野外の宣教者は除外 ／ 加算時間 ${d.credit}h は報告に含めず ／ 週日集会: ${wd ? wd.count + '回・平均 ' + wd.avg : '—'}</div>
     <a class="btn" href="https://hub.jw.org" target="_blank" style="text-align:center;text-decoration:none">hub.jw.org を開く</a>
+    <div class="card" id="doneCard" style="margin-top:12px">${doneCardHtml(d)}</div>
   </div>
   <div id="tab-check" style="display:none">
     <div class="card"><h3>締切後の入力・修正（書記）</h3>
@@ -1248,6 +1658,14 @@ function drawSecretary(d, stale) {
       <button class="btn sec" id="bkStart">今すぐ保存する</button></div>
   </div>
   <div id="tab-setup" style="display:none">
+    <div class="card" id="gr"><h3>グループ編成の変更（グループ表から）</h3>
+      <p class="muted">グループの編成が変わったら、新しいグループ表（PDF）を選んでください。表の名前を名簿と突き合わせ、グループが変わる人・確かめてほしい人を出します。確かめて直してから反映します。<br>
+      反映すると、監督の画面のグループと並び（グループ表の順）・グループの横の監督、URL一覧、S-21 の保存フォルダ（グループ別）がすぐ新しい編成になります。表がなくても、いまの編成を手で直せます。</p>
+      <div id="grStatus"><span class="muted">いまの編成を確認中…</span></div>
+      <input type="file" id="grFile" accept=".pdf,application/pdf,.txt,.csv,text/plain,text/csv" style="display:none">
+      <button class="btn sec" id="grFileBtn">グループ表（PDF）を選ぶ</button>
+      <button class="btn sm sec" id="grManual">表なしで、いまの編成を直す</button>
+      <div id="grOut"></div></div>
     <div class="card" id="hn"><h3>支部に送った数字（過去の月）</h3>
       <p class="muted">この仕組みを始める前の月は、取り込んだS-21（今いる人の分だけ）から数えているため、移って行った人の分が入っていません。hub.jw.org で過去の月の報告（S-1）を見て、同じ数字を入れてください。巡回訪問ダッシュボードや「会衆の様子」の会衆全体の数字は、入れた数字を使います。保管するのは今年度と昨年度です。</p>
       <div id="hnList"><span class="muted">確認中…</span></div></div>
@@ -1315,6 +1733,7 @@ function drawSecretary(d, stale) {
       drawSecretary(f, false);
     } catch (e) { toast(e.message, 'err'); }
   };
+  bindDoneCard(d);
   document.querySelectorAll('[data-credit]').forEach(b => b.onclick = async () => { const [id, cym] = b.dataset.credit.split('|'); const inp = $(`input[data-id="${id}"][data-ym="${cym}"]`); try { await call({ action: 'setCredit', id, ym: cym, credit: inp.value || 0 }); toast('加算時間を記録しました'); } catch (e) { toast(e.message, 'err'); } });
   initPioneer(d.ym);
   $('#ovUrlBtn').onclick = async () => { try { const r = await call({ action: 'overseerUrl' }); $('#ovUrl').innerHTML = `<input type="text" value="${esc(r.url)}" readonly onclick="this.select()" style="margin-top:8px"><button class="btn sm" id="ovUrlCp">コピー</button> <a class="btn sm sec" href="${esc(r.url)}" target="_blank" style="text-decoration:none">開いてみる</a>`; $('#ovUrlCp').onclick = async () => { try { await navigator.clipboard.writeText(r.url); toast('コピーしました'); } catch (e) { toast('コピーできませんでした', 'err'); } }; } catch (e) { toast(e.message, 'err'); } };
@@ -1335,6 +1754,10 @@ function drawSecretary(d, stale) {
   $('#ahFileBtn').onclick = () => $('#ahFile').click();
   $('#ahFile').onchange = (e) => readAttHistFile(e.target.files[0]);
   drawAttHist();
+  $('#grFileBtn').onclick = () => $('#grFile').click();
+  $('#grFile').onchange = (e) => readGroupFile(e.target.files[0]);
+  $('#grManual').onclick = manualGroupRoster;
+  drawGroupStatus(); drawGroupPreview();   // 描き直したときも、確認中の内容はそのまま
   $('#ovpClear').onclick = clearOvPass;
   $('#ovpShow').onchange = (e) => { ['#ovpNew', '#ovpNew2'].forEach(x => { $(x).type = e.target.checked ? 'text' : 'password'; }); };
   ['#ovpNew', '#ovpNew2'].forEach(x => { $(x).oninput = (e) => { e.target.value = e.target.value.replace(/[^0-9]/g, '').slice(0, 6); }; });
@@ -1343,7 +1766,7 @@ function drawSecretary(d, stale) {
 /** 書記: 作成済みPDFの一覧（Driveのリンク） */
 function secPdfList(s) {
   if (!s || !s.files || !s.files.some(f => !f.missing)) return '<div class="muted" style="margin-top:8px">まだ作成していません。</div>';
-  const changed = [s.newer ? '報告が ' + s.newer + ' 件追加・変更' : '', s.aggregatedAfter ? '月次集計' : ''].filter(Boolean).join('、');
+  const changed = [s.newer ? '報告が ' + s.newer + ' 件追加・変更' : '', s.aggregatedAfter ? '月次集計' : '', s.regroupedAfter ? 'グループ編成の変更' : ''].filter(Boolean).join('、');
   return `<div style="margin-top:10px"><b>作成済み</b>　<span class="muted">${s.years.map(esc).join('・')} 年度　${esc(s.generated)}</span>
     ${changed ? `<div class="msg warn">作成後に${changed}がありました。最新にするには作り直してください。</div>` : ''}
     ${s.files.map(f => `<div class="kv"><div class="k">${esc(f.label)}${(f.parts || []).length > 1 ? `<br><span class="muted">${f.parts.map(x => `<a href="${esc(x.url)}" target="_blank">${x.kind === 'orig' ? '元のS-21 ' + esc(x.person) : '作成分 ' + x.pages + 'ページ'}</a>`).join('　')}</span>` : ''}${f.missingOriginals ? `<br><span class="muted" style="color:var(--warn)">元のS-21が見つからない人 ${f.missingOriginals}名（空のS-21にしました）</span>` : ''}</div>${f.missing ? '<span class="muted">未作成</span>' : f.empty ? '<span class="muted">該当なし</span>' : (f.parts || []).length > 1 ? `<span class="muted">${f.parts.length}ファイル</span>` : `<a href="${esc(f.url)}" target="_blank">${f.pages}ページ</a>`}</div>`).join('')}</div>`;
@@ -1764,7 +2187,7 @@ function pdfCardHtml(d) {
   if (!s || !s.ready) return `<div class="card pdfc"><h3>正式な記録（PDF）</h3><div class="muted">まだ作成されていません。書記が作成すると、ここからダウンロードできます。</div></div>`;
   const files = s.files.filter(f => !f.missing && !f.empty), pages = files.reduce((a, f) => a + (f.pages || 0), 0);
   const unknown = files.some(f => (f.parts || []).some(x => !x.pages));
-  const changed = [s.newer ? '報告が ' + s.newer + ' 件追加・変更' : '', s.aggregatedAfter ? '月次集計（活発／不活発の判定）' : ''].filter(Boolean).join('、');
+  const changed = [s.newer ? '報告が ' + s.newer + ' 件追加・変更' : '', s.aggregatedAfter ? '月次集計（活発／不活発の判定）' : '', s.regroupedAfter ? 'グループ編成の変更' : ''].filter(Boolean).join('、');
   return `<div class="card pdfc"><h3>正式な記録（PDF）</h3>
     <div class="muted">S-21（公式様式・1人1ページ）と S-88　${s.years.map(esc).join('・')} 奉仕年度　作成 ${esc(s.generated)}</div>
     ${changed ? `<div class="msg warn">PDFの作成後に、${changed}がありました。この画面の表は最新ですが、PDFは作成時点の内容です。</div>` : ''}
