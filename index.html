@@ -97,6 +97,8 @@
   details.grg > summary small { font-weight:normal; color:var(--gray); }
   .grg .gl { display:grid; grid-template-columns:52px 1fr; gap:6px 8px; align-items:center; font-size:13px; margin:2px 0 8px; }
   .grg .gl select, .grg .gl input { font-size:14px; padding:5px 6px; }
+  .tig { display:grid; grid-template-columns:76px minmax(0,1fr); gap:6px 8px; align-items:center; font-size:14px; margin-top:10px; }
+  .tig input, .tig select { width:100%; box-sizing:border-box; }
   details.grp { padding:0; overflow:hidden; }
   details.grp > summary { list-style:none; padding:12px 14px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
   details.grp > summary::-webkit-details-marker { display:none; }
@@ -438,7 +440,7 @@ function personalSubnote(r, d) {
   // 書記が「報告完了」にした月（締切の前でも送れない・変えられない。2026-10-28〜）
   const why = d && d.done ? '書記が「報告完了」にした' : '締切' + (d ? '（' + deadlineLabel(d.ym, d.deadline) + '）' : '') + 'を過ぎた';
   if (!r.submitted) return d && d.locked ? `<div class="msg warn">${why}ため、${ymLabel(d.ym)}分の報告はここからは送れません。<br><b>まだ報告していないときは、書記に伝えてください</b>（書記が入力します）。</div>` : '';
-  const who = r.source === 'overseer' ? '監督入力' : r.source === 'import' ? '取込' : r.source === 'map' ? '区域マップ' : '本人';
+  const who = r.source === 'overseer' ? '監督入力' : r.source === 'import' ? '取込' : r.source === 'transfer' ? '前の会衆' : r.source === 'map' ? '区域マップ' : '本人';
   if (r.locked || (d && d.locked)) return `<div class="msg warn">提出済み: ${esc(r.submitted)}（${who}）<br>${why}ため、この月の報告は変更できません。直す必要があるときは、書記に伝えてください（書記が直します）。</div>`;
   return `<div class="muted" style="margin-top:8px">提出済み: ${esc(r.submitted)}（${who}）。送信すると上書きされます。</div>`;
 }
@@ -784,7 +786,7 @@ function rowStatus(m) {
   const tail = !r ? '' : (r.late ? '<span class="pill warn">締切後に提出</span>' : '') + (r.locked ? '<span class="pill" title="締切を過ぎたため変更できません（書記のみ）">🔒</span>' : '');
   if (isOwn(r)) return '<span class="pill">本人提出</span>' + tail;
   if (r && r.source === 'overseer') return '<span class="pill ok">入力済</span>' + tail;
-  if (r) return '<span class="pill">' + (r.source === 'import' ? '取込' : '入力済') + '</span>' + tail;
+  if (r) return '<span class="pill">' + (r.source === 'import' ? '取込' : r.source === 'transfer' ? '前の会衆' : '入力済') + '</span>' + tail;
   return '';
 }
 function memberRow(m) {
@@ -1618,6 +1620,178 @@ async function undoGroupRoster() {
   } catch (e) { toast(e.message, 'err'); b.disabled = false; }
 }
 
+// ------------------------------------------------------------
+// 書記: 転入した人の S-21（PDF）を読み込む（初期設定タブ「転出・転入」。2026-10-28〜）
+//   PDF の入力欄はこの端末で読む（pdf-lib）。読み → ローマ字は kanaToRomaji。名簿への登録・報告の取り込みはサーバー（transferIn）
+// ------------------------------------------------------------
+const KANA_ROMA = { あ:'A',い:'I',う:'U',え:'E',お:'O',か:'KA',き:'KI',く:'KU',け:'KE',こ:'KO',さ:'SA',し:'SHI',す:'SU',せ:'SE',そ:'SO',た:'TA',ち:'CHI',つ:'TSU',て:'TE',と:'TO',な:'NA',に:'NI',ぬ:'NU',ね:'NE',の:'NO',は:'HA',ひ:'HI',ふ:'FU',へ:'HE',ほ:'HO',ま:'MA',み:'MI',む:'MU',め:'ME',も:'MO',や:'YA',ゆ:'YU',よ:'YO',ら:'RA',り:'RI',る:'RU',れ:'RE',ろ:'RO',わ:'WA',ゐ:'I',ゑ:'E',を:'O',ん:'N',
+  が:'GA',ぎ:'GI',ぐ:'GU',げ:'GE',ご:'GO',ざ:'ZA',じ:'JI',ず:'ZU',ぜ:'ZE',ぞ:'ZO',だ:'DA',ぢ:'JI',づ:'ZU',で:'DE',ど:'DO',ば:'BA',び:'BI',ぶ:'BU',べ:'BE',ぼ:'BO',ぱ:'PA',ぴ:'PI',ぷ:'PU',ぺ:'PE',ぽ:'PO',ゔ:'VU',ぁ:'A',ぃ:'I',ぅ:'U',ぇ:'E',ぉ:'O',ゃ:'YA',ゅ:'YU',ょ:'YO',ゎ:'WA' };
+const KANA_YOON = { きゃ:'KYA',きゅ:'KYU',きょ:'KYO',しゃ:'SHA',しゅ:'SHU',しょ:'SHO',ちゃ:'CHA',ちゅ:'CHU',ちょ:'CHO',にゃ:'NYA',にゅ:'NYU',にょ:'NYO',ひゃ:'HYA',ひゅ:'HYU',ひょ:'HYO',みゃ:'MYA',みゅ:'MYU',みょ:'MYO',りゃ:'RYA',りゅ:'RYU',りょ:'RYO',ぎゃ:'GYA',ぎゅ:'GYU',ぎょ:'GYO',じゃ:'JA',じゅ:'JU',じょ:'JO',ぢゃ:'JA',ぢゅ:'JU',ぢょ:'JO',びゃ:'BYA',びゅ:'BYU',びょ:'BYO',ぴゃ:'PYA',ぴゅ:'PYU',ぴょ:'PYO',しぇ:'SHE',ちぇ:'CHE',じぇ:'JE',てぃ:'TI',でぃ:'DI',ふぁ:'FA',ふぃ:'FI',ふぇ:'FE',ふぉ:'FO',うぃ:'WI',うぇ:'WE',うぉ:'WO',ゔぁ:'VA',ゔぃ:'VI',ゔぇ:'VE',ゔぉ:'VO' };
+/** 読み（ひらがな・カタカナ）→ ローマ字（ヘボン式・大文字。名字と名前の間の空白はそのまま）。読めない文字はそのまま */
+function kanaToRomaji(s) {
+  const h = String(s || '').normalize('NFKC').replace(/[\u30a1-\u30f6]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60)).replace(/[\s　・]+/g, ' ').trim();
+  let out = '';
+  for (let i = 0; i < h.length; i++) {
+    const c = h[i], two = h.slice(i, i + 2);
+    if (c === 'っ') { const nx = KANA_YOON[h.slice(i + 1, i + 3)] || KANA_ROMA[h[i + 1]] || ''; out += nx.startsWith('CH') ? 'T' : (nx[0] || ''); continue; }
+    if (c === 'ー') continue;
+    if (KANA_YOON[two]) { out += KANA_YOON[two]; i++; continue; }
+    out += KANA_ROMA[c] !== undefined ? KANA_ROMA[c] : c.toUpperCase();
+  }
+  return out.replace(/\s+/g, ' ').trim();
+}
+/** S-21（公式の入力欄つき PDF）の欄 → 1年度分（Import.gs の fieldsToRecord_ と同じ欄） */
+function s21FieldsToRecord(f, fileName) {
+  const g = (k) => f[k] === undefined ? '' : f[k];
+  const yes = (k) => g(k) === true || /^(true|yes|\/yes|on|1)$/i.test(String(g(k)));
+  const toInt = (v) => { const n = parseInt(String(v).replace(/[^\d-]/g, ''), 10); return isNaN(n) ? 0 : n; };
+  const nd = (v) => { const m = String(v || '').normalize('NFKC').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/); return m ? m[1] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[3]).slice(-2) : String(v || '').trim(); };
+  const fn = String(fileName || '').replace(/\.pdf$/i, '');
+  const yearFromName = (fn.match(/\((\d{4})\)/) || fn.match(/[_\s](\d{4})(?!\d)/) || [])[1] || '';
+  let sy = toInt(g('900_13_Text_C_SanSerif'));
+  if (sy < 2000 || sy > 2100) sy = toInt(yearFromName) || sy;
+  const months = [];
+  [9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8].forEach((mon, i) => {
+    const r = 20 + i;
+    const chk = yes('901_' + r + '_CheckBox'), studies = toInt(g('902_' + r + '_Text_C_SanSerif')), aux = yes('903_' + r + '_CheckBox'), hours = toInt(g('904_' + r + '_S21_Value')), remarks = String(g('905_' + r + '_Text_SanSerif') || '');
+    if (!(chk || studies || aux || hours || remarks)) return;
+    const y = mon >= 9 ? sy - 1 : sy;
+    months.push({ ym: y + '-' + ('0' + mon).slice(-2), preached: chk || hours > 0 || studies > 0, studies, aux, hours, remarks });
+  });
+  const raw = String(g('900_1_Text_SanSerif') || '').normalize('NFKC');
+  const km = raw.match(/[(]\s*([ぁ-んァ-ヶー\s]+?)\s*[)]/);   // 名前のかっこ書きの読み（「宮城　次郎（みやぎ　じろう）」）
+  return {
+    file: String(fileName || ''), sy, name: String(g('900_1_Text_SanSerif') || '').replace(/[\s　]+/g, '').trim(),
+    kana: km ? km[1].replace(/\s+/g, ' ') : '',
+    romaji: ((fn.match(/^([A-Za-z][A-Za-z .'\-]*?)\s+[^\x00-\x7F]/) || [])[1] || '').trim().toUpperCase(),
+    birth: nd(g('900_2_Text_SanSerif')), baptism: nd(g('900_5_Text_SanSerif')),
+    sex: yes('900_3_CheckBox') ? '男性' : yes('900_4_CheckBox') ? '女性' : '', hope: yes('900_6_CheckBox') ? 'ほかの羊' : yes('900_7_CheckBox') ? '天に行く者' : '',
+    flags: { elder: yes('900_8_CheckBox'), ms: yes('900_9_CheckBox'), rp: yes('900_10_CheckBox'), sp: yes('900_11_CheckBox'), fm: yes('900_12_CheckBox') },
+    months,
+  };
+}
+async function readS21Pdf(file) {
+  let lib; try { lib = await loadPdfLib(); } catch (e) { throw new Error('S-21 を読む部品を読み込めませんでした。通信を確かめて、もう一度選んでください'); }
+  const buf = await file.arrayBuffer();
+  let fields = {};
+  try {
+    const doc = await lib.PDFDocument.load(buf, { ignoreEncryption: true, updateMetadata: false });
+    doc.getForm().getFields().forEach(f => { const n = f.getName(); try { fields[n] = f instanceof lib.PDFCheckBox ? f.isChecked() : f instanceof lib.PDFTextField ? (f.getText() || '') : ''; } catch (e) { fields[n] = ''; } });
+  } catch (e) { fields = {}; }
+  let bin = ''; const u8 = new Uint8Array(buf); for (let i = 0; i < u8.length; i += 0x8000) bin += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+  const ok = fields['900_1_Text_SanSerif'] !== undefined;
+  return { file: { name: file.name, data: btoa(bin), size: file.size }, rec: ok ? s21FieldsToRecord(fields, file.name) : null };
+}
+let tiP = null;   // 確認中の転入 {recs, files, bad, chk, form}
+async function readTransferFiles(list) {
+  const files = [...(list || [])].filter(f => /\.pdf$/i.test(f.name) || f.type === 'application/pdf');
+  if (!files.length) return;
+  if (files.some(f => f.size > 5 * 1024 * 1024)) return toast('5MB より大きい PDF があります', 'err');
+  const b = $('#tiFileBtn'); b.disabled = true; b.textContent = '読み取っています…';
+  try {
+    const got = []; for (const f of files) got.push(await readS21Pdf(f));
+    const recs = got.filter(x => x.rec).map(x => x.rec), bad = got.filter(x => !x.rec).map(x => x.file.name);
+    const names = [...new Set(recs.map(r => r.name).filter(Boolean))];
+    if (names.length > 1) { toast('別の人の S-21 がまざっています（' + names.join('・') + '）。1人分ずつ選んでください', 'warn'); return; }
+    const name = names[0] || '';
+    const chk = await call({ action: 'transferIn', op: 'check', name });
+    // 読み: 名前のかっこ書き（「浅野七海(あさのななみ)」）。ローマ字: ファイル名（「ASANO NANAMI 浅野七海(2027).pdf」）か読みから
+    const kana = (recs.find(r => r.kana) || {}).kana || '';
+    const latest = recs.slice().sort((a, c) => c.sy - a.sy)[0] || { flags: {} };
+    const allM = [].concat(...recs.map(r => r.months)).map(m => m.ym).sort();
+    const lastYm = allM[allM.length - 1] || '';
+    // 転入した月の案: 前の会衆での最後の報告の次の月（ずっと前なら、いま報告を集めている月）
+    let inYm = lastYm ? ymAdd(lastYm, 1) : chk.collecting;
+    if (inYm > chk.collecting || inYm < ymAdd(chk.collecting, -3)) inYm = chk.collecting;
+    // 同じ名前の人: いまの名簿の人（先に手で加えた人）→ 前に転出した人（戻って来た人）の順に選んでおく
+    const cur = chk.matches.find(m => m.current) || chk.matches[0];
+    if (cur && cur.inYm) inYm = cur.inYm;
+    const fileRom = (recs.find(r => r.romaji) || {}).romaji || '';
+    tiP = { recs, files: got.map(x => x.file), bad, chk, lastYm,
+      form: { name: name.replace(/[（(][^)）]*[)）]/g, ''), kana, romaji: fileRom || (cur && cur.romaji) || (kana ? kanaToRomaji(kana) : ''), romajiAuto: !fileRom && !(cur && cur.romaji),
+        group: cur ? cur.group : '', inYm, flags: Object.assign({ elder: false, ms: false, rp: false, sp: false, fm: false }, latest.flags), existingId: cur ? cur.id : '' } };
+    drawTransfer();
+    const out = $('#tiOut'); if (out) out.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (e) { toast(e.message, 'err'); }
+  finally { b.disabled = false; b.textContent = 'S-21（PDF）を選ぶ'; $('#tiFile').value = ''; }
+}
+function tiPath() {
+  const P = tiP, f = P.form, c = P.chk;
+  const months = {}; P.recs.forEach(r => r.months.forEach(m => { months[m.ym] = m; }));
+  let active = false; for (let i = 0; i < (c.actN || 6); i++) { const m = months[ymAdd(c.asOf, -i)]; if (m && m.preached) { active = true; break; } }
+  if (!P.recs.length) active = true;
+  const pio = f.flags.rp || f.flags.sp || f.flags.fm;
+  const dir = !active ? '不活発' : pio ? '活発 › 1_正規開拓者・特別開拓者・野外の宣教者' : '活発 › 2_他の全ての伝道者 › ' + (f.group || '（グループなし）');
+  return { active, text: dir + ' › ' + ((f.romaji ? f.romaji + ' ' : '') + (f.name || '')) + '.pdf' };
+}
+function drawTransfer() {
+  const out = $('#tiOut'); if (!out) return;
+  const P = tiP;
+  if (!P) { out.innerHTML = ''; return; }
+  const f = P.form, c = P.chk;
+  const yl = (sy) => sy + '年度';
+  const fl = (x) => ['elder:長老', 'ms:援助奉仕者', 'rp:正規開拓者', 'sp:特別開拓者', 'fm:野外の宣教者'].map(s => s.split(':')).filter(([k]) => x[k]).map(([, l]) => l).join('・');
+  const before = [].concat(...P.recs.map(r => r.months)).filter(m => m.ym < f.inYm).length, after = [].concat(...P.recs.map(r => r.months)).filter(m => m.ym >= f.inYm).length;
+  const r0 = P.recs.slice().sort((a, b) => b.sy - a.sy)[0] || {};
+  const path = tiPath();
+  out.innerHTML = `<div class="grbox" style="margin-top:8px"><b>読み取った S-21</b>
+      ${P.recs.length ? `<table class="grt"><tr><th>年度</th><th>報告</th><th>印</th><th>ファイル</th></tr>${P.recs.slice().sort((a, b) => a.sy - b.sy).map(r => `<tr><td>${yl(r.sy)}</td><td>${r.months.length}カ月${r.months.length ? '<br><small class="muted">' + esc(r.months[0].ym) + '〜' + esc(r.months[r.months.length - 1].ym) + '</small>' : ''}</td><td>${esc(fl(r.flags)) || '<span class="muted">—</span>'}</td><td style="word-break:break-all;font-size:11px">${esc(r.file)}</td></tr>`).join('')}</table>
+      <div class="muted">${[r0.birth ? '生年月日 ' + esc(r0.birth) : '', r0.baptism ? 'バプテスマ ' + esc(r0.baptism) : '', esc(r0.sex || ''), esc(r0.hope || '')].filter(Boolean).join('・')}</div>` : ''}
+      ${P.bad.length ? `<div class="msg warn">入力欄が読めない PDF（スキャン・別の様式）: ${P.bad.map(esc).join('・')}<br>報告は読み取れません。名簿への登録と PDF の保存だけします（報告はこの PDF を見て、監督の画面を書記として開いて入れられます）。</div>` : ''}</div>
+    ${c.matches.length ? `<div class="msg ${c.nameTaken ? 'warn' : 'ok'}" style="margin-top:8px">名簿に同じ名前の人がいます。<br>
+      ${c.matches.map(m => `<label style="display:block;margin-top:4px"><input type="radio" name="tiWho" value="${esc(m.id)}" ${f.existingId === m.id ? 'checked' : ''}> ${esc(m.name)}（${esc(m.group || 'グループなし')}${m.outYm ? '・' + esc(ymLabel(m.outYm)) + 'に転出' : ''}${m.current ? '' : '・名簿から外れています'}）として取り込む</label>`).join('')}
+      <label style="display:block;margin-top:4px"><input type="radio" name="tiWho" value="" ${!f.existingId ? 'checked' : ''}> 別の人として新しく加える</label></div>` : ''}
+    <div class="tig">
+      <span>氏名</span><input type="text" id="tiName" value="${esc(f.name)}" ${f.existingId ? 'disabled' : ''}>
+      <span>読み</span><input type="text" id="tiKana" value="${esc(f.kana)}" placeholder="例: やましろ はなこ">
+      <span>ローマ字</span><div><input type="text" id="tiRomaji" value="${esc(f.romaji)}" placeholder="例: ASANO NANAMI" style="text-transform:uppercase">
+        ${(c.family || []).length && !f.romaji ? `<div class="muted" style="font-size:12px">名字が同じかもしれない人: ${c.family.map(x => `<button class="btn sm sec" data-tifam="${esc(x.romaji.split(' ')[0])}">${esc(x.name)}（${esc(x.romaji.split(' ')[0])}）</button>`).join(' ')}</div>` : ''}</div>
+      <span>グループ</span><select id="tiGroup"><option value="">（グループなし）</option>${c.groups.map(g => `<option ${g === f.group ? 'selected' : ''}>${esc(g)}</option>`).join('')}</select>
+      <span>転入した月</span><input type="month" id="tiIn" value="${esc(f.inYm)}">
+    </div>
+    <div style="font-size:13px;margin-top:4px">${['elder:長老', 'ms:援助奉仕者', 'rp:正規開拓者', 'sp:特別開拓者', 'fm:野外の宣教者'].map(s => s.split(':')).map(([k, l]) => `<label style="display:inline-flex;align-items:center;gap:4px;margin:2px 10px 2px 0"><input type="checkbox" data-tif="${k}" ${f.flags[k] ? 'checked' : ''} style="width:18px;height:18px">${l}</label>`).join('')}</div>
+    <div class="msg ok" style="margin-top:8px;font-size:13px">
+      S-21 の保存先: <b>${esc(path.text)}</b>${path.active ? '' : '（過去6カ月に伝道の報告がないため不活発）'}<br>
+      取り込む報告: ${P.recs.length ? `転入した月より前の <b>${before}カ月</b>（前の会衆での報告。S-21 に続けて載り、会衆の合計には入りません）${after ? `／転入した月から後の ${after}カ月は取り込みません（この会衆で報告します）` : ''}` : 'なし'}<br>
+      受け取った PDF ${P.files.length}件は、S-21 の保存フォルダの「転入した人の元のS-21」に残します。</div>
+    <button class="btn" id="tiApply">${f.existingId ? '名簿の人に取り込む' : '名簿に加えて取り込む'}</button><button class="btn sec" id="tiCancel">やめる</button>`;
+  const sync = () => {
+    f.name = $('#tiName').value.trim(); f.group = $('#tiGroup').value; f.inYm = $('#tiIn').value;
+    out.querySelectorAll('[data-tif]').forEach(x => { f.flags[x.dataset.tif] = x.checked; });
+  };
+  $('#tiKana').oninput = (e) => { f.kana = e.target.value; if (f.romajiAuto || !f.romaji) { f.romaji = kanaToRomaji(f.kana); f.romajiAuto = true; $('#tiRomaji').value = f.romaji; } };
+  $('#tiKana').onchange = () => { sync(); drawTransfer(); };
+  $('#tiRomaji').oninput = (e) => { f.romaji = e.target.value.toUpperCase(); f.romajiAuto = false; };
+  $('#tiRomaji').onchange = () => { sync(); drawTransfer(); };
+  ['#tiName', '#tiGroup', '#tiIn'].forEach(sel => { $(sel).onchange = () => { sync(); drawTransfer(); }; });
+  out.querySelectorAll('[data-tif]').forEach(x => { x.onchange = () => { sync(); drawTransfer(); }; });
+  out.querySelectorAll('input[name=tiWho]').forEach(x => { x.onchange = () => { sync(); f.existingId = x.value; const m = c.matches.find(y => y.id === x.value); if (m) { f.group = m.group; if (m.romaji && !f.romaji) f.romaji = m.romaji; } drawTransfer(); }; });
+  out.querySelectorAll('[data-tifam]').forEach(x => { x.onclick = () => { sync(); f.romaji = x.dataset.tifam + ' '; f.romajiAuto = false; drawTransfer(); const el = $('#tiRomaji'); el.focus(); el.setSelectionRange(f.romaji.length, f.romaji.length); }; });
+  $('#tiCancel').onclick = () => { tiP = null; drawTransfer(); };
+  $('#tiApply').onclick = applyTransfer;
+}
+async function applyTransfer() {
+  const P = tiP; if (!P) return;
+  const f = P.form;
+  if (!f.name) return toast('氏名を入れてください', 'warn');
+  if (!/^\d{4}-\d{2}$/.test(f.inYm)) return toast('転入した月を選んでください', 'warn');
+  if (!f.romaji && !confirm('ローマ字が空です（S-21 の並び・ファイル名が氏名の順になります）。このまま取り込みますか？')) return;
+  const path = tiPath();
+  if (!confirm(`${f.name}さんを${f.existingId ? '名簿の人として' : '名簿に加えて'}取り込みます。\nグループ: ${f.group || 'グループなし'}／転入した月: ${ymLabel(f.inYm)}\nS-21 の保存先: ${path.text}\n\nよろしいですか？`)) return;
+  const b = $('#tiApply'); b.disabled = true; b.textContent = '取り込んでいます…';
+  try {
+    const r = await call({ action: 'transferIn', op: 'apply', records: P.recs, files: P.files, person: { existingId: f.existingId, name: f.name, romaji: f.romaji, group: f.group, inYm: f.inYm, flags: f.flags } });
+    tiP = null;
+    $('#tiOut').innerHTML = `<div class="msg ok" style="margin-top:8px">${esc(r.name)}さんを${r.isNew ? '名簿に加えました' : '名簿の人に取り込みました'}（報告 ${r.added + r.replaced}カ月${r.skipped ? '・この会衆で入力済みの ' + r.skipped + 'カ月はそのまま' : ''}${r.later ? '・転入後の ' + r.later + 'カ月は入れていません' : ''}）。<br>
+      ${r.backup && r.backup.started ? 'S-21 の保存を始めました（数分でグループのフォルダに入ります）。' : ''}${(r.saved || []).length ? '受け取った PDF を保存しました。' : ''}</div>
+      <div style="font-size:14px">${esc(r.name)}さんの個人用URL（本人に渡してください）</div>
+      <input type="text" id="tiUrl" value="${esc(r.url)}" readonly onclick="this.select()" style="font-size:12px"><button class="btn sm" id="tiUrlCp">URLをコピー</button>`;
+    $('#tiUrlCp').onclick = () => copyText(r.url, $('#tiUrl'), 'URLをコピーしました');
+    toast(r.name + 'さんを取り込みました');
+    loadRoster();
+  } catch (e) { toast(e.message, 'err'); b.disabled = false; b.textContent = f.existingId ? '名簿の人に取り込む' : '名簿に加えて取り込む'; }
+}
+
 function drawSecretary(d, stale) {
   sec = d;
   const opts = []; for (let i = -1; i < 13; i++) opts.push(ymAdd(d.ym, -i + 0)); const sel = [...new Set([ymAdd(d.ym, 1), ...opts])];
@@ -1711,7 +1885,12 @@ function drawSecretary(d, stale) {
         <label style="font-size:14px;flex:1 1 140px">転入した月<input type="month" id="rsIn" style="display:block;width:100%;font-size:16px;padding:6px;border:1px solid var(--line);border-radius:6px"></label>
       </div>
       <button class="btn sec" id="rsSave">保存する</button>
-      <div id="rsList"></div></div>
+      <div id="rsList"></div>
+      <div class="vlog"><b style="font-size:14px">転入した人の S-21（PDF）を読み込む</b>
+        <p class="muted" style="margin:4px 0">前の会衆から届いた S-21（入力欄のある公式の PDF。年度ごとのファイルはまとめて選べます）を選ぶと、名前・生年月日・区分・これまでの報告を読み取ります。読みを入れるとローマ字（S-21 の並び・ファイル名に使う）を作ります。グループと転入した月を選んで取り込むと、名簿に加わり、前の会衆での報告は S-21 に続けて載ります（会衆の合計には転入した月から数えます）。受け取った PDF は S-21 の保存フォルダに残します。</p>
+        <input type="file" id="tiFile" accept=".pdf,application/pdf" multiple style="display:none">
+        <button class="btn sec" id="tiFileBtn">S-21（PDF）を選ぶ</button>
+        <div id="tiOut"></div></div></div>
     <div class="card"><h3>監督用URL（全グループ共通・1つだけ）</h3>
       <p class="muted">全グループの監督に同じURLを配ります。開くと全員分の一覧が出るので、自分のグループを開いて入力します（他のグループの人の分も入力できます。開いたグループはその端末に記憶されます）。他のグループの提出状況も見られます。URLを知っている人は誰でも入力できるので、監督以外には渡さないでください（作り直しはスプレッドシートのメニュー「監督共通URLを作り直す」）。</p>
       <button class="btn sm sec" id="ovUrlBtn">監督用URLを表示</button><div id="ovUrl"></div></div>
@@ -1787,6 +1966,9 @@ function drawSecretary(d, stale) {
   $('#ahFileBtn').onclick = () => $('#ahFile').click();
   $('#ahFile').onchange = (e) => readAttHistFile(e.target.files[0]);
   drawAttHist();
+  $('#tiFileBtn').onclick = () => $('#tiFile').click();
+  $('#tiFile').onchange = (e) => readTransferFiles(e.target.files);
+  drawTransfer();
   $('#grFileBtn').onclick = () => $('#grFile').click();
   $('#grFile').onchange = (e) => readGroupFile(e.target.files[0]);
   $('#grManual').onclick = manualGroupRoster;
